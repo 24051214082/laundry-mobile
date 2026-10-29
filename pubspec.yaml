@@ -1,0 +1,33 @@
+name: wish_you_wash_here
+description: "Aplikasi Mobile Layanan Laundry - Wish You Wash Here"
+publish_to: 'none'
+
+version: 1.0.0+1
+
+environment:
+  sdk: '>=3.0.0 <4.0.0'
+
+dependencies:
+  flutter:
+    sdk: flutter
+
+  # Icons bawaan iOS
+  cupertino_icons: ^1.0.8
+
+  # Package Google Fonts untuk tipografi (Poppins & Caveat)
+  google_fonts: ^6.2.1
+
+  # Package intl untuk format mata uang/tanggal nanti
+  intl: ^0.19.0
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^3.0.0
+
+flutter:
+  uses-material-design: true
+
+  # Mendaftarkan folder aset gambar (logo.png)
+  assets:
+    - assets/
