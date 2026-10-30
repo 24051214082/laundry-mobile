@@ -29,7 +29,7 @@ class MyApp extends StatelessWidget {
           primary: const Color(0xFF338CA8),
         ),
       ),
-      initialRoute: '/booking',
+      initialRoute: '/home',
       routes: {
         '/login': (context) => const LoginPage(),
         '/signup': (context) => const SignUpPage(),
