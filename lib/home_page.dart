@@ -67,8 +67,12 @@ class _HomePageState extends State<HomePage> {
                     ),
                     Row(
                       children: [
+                        GestureDetector(
+                          onTap: () {
+                            Navigator.pushNamed(context, '/order-notification');
+                          },
                         // Tombol Lonceng Notifikasi dengan Badge Merah
-                        Stack(
+                        child: Stack(
                           clipBehavior: Clip.none,
                           children: [
                             Container(
@@ -96,6 +100,7 @@ class _HomePageState extends State<HomePage> {
                               ),
                             ),
                           ],
+                        ),
                         ),
                         const SizedBox(width: 12),
                         // Avatar Profil

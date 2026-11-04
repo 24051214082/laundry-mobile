@@ -4,6 +4,9 @@ import 'login_page.dart';
 import 'signup_page.dart';
 import 'home_page.dart';
 import 'booking_page.dart';
+import 'customer_data_page.dart';
+import 'manage_services_page.dart';
+import 'order_notification_page.dart';
 
 void main() {
   WidgetsFlutterBinding.ensureInitialized();
@@ -29,12 +32,15 @@ class MyApp extends StatelessWidget {
           primary: const Color(0xFF338CA8),
         ),
       ),
-      initialRoute: '/home',
+      initialRoute: '/login',
       routes: {
         '/login': (context) => const LoginPage(),
         '/signup': (context) => const SignUpPage(),
         '/home': (context) => const HomePage(),
         '/booking': (context) => const BookingPage(),
+        '/customer-data': (context) => const CustomerDataPage(),
+        '/manage-services': (context) => const ManageServicesPage(),
+        '/order-notification': (context) => const OrderNotificationPage(),
       },
     );
   }
