@@ -5,16 +5,6 @@ import 'order_confirmation_page.dart';
 // ---------------------------------------------------------------------------
 // Halaman Detail Pesanan
 // Letakkan di: lib/order_detail_page.dart
-//
-// Dibuka dari halaman Riwayat (tombol "Detail Pesanan"):
-//
-//   Navigator.pushNamed(
-//     context,
-//     '/order-detail',
-//     arguments: OrderDetailArgs(id: 'LD001', date: '22 Oktober 2026 17.20', summary: ...),
-//   );
-//
-// Kalau dibuka tanpa arguments (untuk testing), memakai data contoh wireframe.
 // ---------------------------------------------------------------------------
 
 class _C {
@@ -39,34 +29,59 @@ class OrderDetailArgs {
 class OrderDetailPage extends StatelessWidget {
   const OrderDetailPage({super.key});
 
-  // Data contoh sesuai wireframe.
+  // Data default jika dibuka tanpa argumen
   static const OrderSummary _dummySummary = OrderSummary(
     jenisLaundry: 'Kiloan',
-    kecepatan: 'Express',
+    kecepatan: 'Reguler',
     pengerjaan: 'Cuci + Setrika',
-    deterjen: 'Deterjen A',
-    pewangi: 'Pewangi A',
-    metode: 'Penjemputan',
-    jadwal: '22 Oktober 2026 - 08.00',
-    alamat: 'xxxxxxx',
+    deterjen: 'Anti Bakteri',
+    pewangi: 'Ocean Fresh',
+    metode: 'Antar Jemput Driver',
+    jadwal: '18 April 2027 - 08.00',
+    alamat: 'Jl. Ketintang Baru No. 12, Surabaya',
     biaya: [
-      CostItem('Berat minimum', 'Rp20.000'),
-      CostItem('Berat Tambahan', 'Rp3.000'),
-      CostItem('Biaya Express', 'Rpxxxxxx'),
-      CostItem('Cuci + Setrika', 'Rpxxxxxx'),
-      CostItem('Tambahan Deterjen', 'Rp1.000'),
-      CostItem('Tambahan Pewangi', 'Rp1.000'),
+      CostItem('Berat (5.0 kg)', 'Rp25.000'),
+      CostItem('Pengerjaan Cuci + Setrika', 'Rp5.000'),
+      CostItem('Tambahan Pewangi Ocean Fresh', 'Rp2.500'),
+      CostItem('Ongkir Jemput & Antar', 'Rp2.500'),
     ],
-    subtotal: 'Rp2xxxx',
+    subtotal: 'Rp35.000',
   );
 
   @override
   Widget build(BuildContext context) {
     final raw = ModalRoute.of(context)?.settings.arguments;
-    final args = raw is OrderDetailArgs
-        ? raw
-        : const OrderDetailArgs(id: 'LD001', date: '22 Oktober 2026 17.20');
-    final s = args.summary ?? _dummySummary;
+
+    String orderId = '#LKN4wa123';
+    String orderDate = '18 April 2027 08.00';
+    OrderSummary s = _dummySummary;
+
+    // Menangani argumen dari HomePage (Map) maupun dari OrderHistory (OrderDetailArgs)
+    if (raw is OrderDetailArgs) {
+      orderId = raw.id;
+      orderDate = raw.date;
+      s = raw.summary ?? _dummySummary;
+    } else if (raw is Map<String, dynamic>) {
+      orderId = raw['orderId']?.toString() ?? orderId;
+      orderDate = raw['estimate']?.toString() ?? orderDate;
+      s = OrderSummary(
+        jenisLaundry: raw['serviceName']?.toString() ?? 'Kiloan',
+        kecepatan: raw['treatment']?.toString() ?? 'Reguler',
+        pengerjaan: raw['treatment']?.toString() ?? 'Cuci + Setrika',
+        deterjen: raw['detergent']?.toString() ?? 'Anti Bakteri',
+        pewangi: raw['perfume']?.toString() ?? 'Ocean Fresh',
+        metode: raw['method']?.toString() ?? 'Antar Jemput Driver',
+        jadwal: raw['estimate']?.toString() ?? orderDate,
+        alamat: raw['address']?.toString() ?? 'Jl. Ketintang Baru No. 12, Surabaya',
+        biaya: [
+          CostItem(
+            'Layanan & Berat (${raw['weight'] ?? '5.0 kg'})',
+            raw['totalPrice']?.toString() ?? 'Rp35.000',
+          ),
+        ],
+        subtotal: raw['totalPrice']?.toString() ?? 'Rp35.000',
+      );
+    }
 
     return Scaffold(
       backgroundColor: Colors.white,
@@ -76,30 +91,62 @@ class OrderDetailPage extends StatelessWidget {
           Expanded(
             child: SingleChildScrollView(
               padding: const EdgeInsets.fromLTRB(24, 16, 24, 16),
+              physics: const BouncingScrollPhysics(),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(
-                    'No. Pesanan ${args.id}',
-                    style: GoogleFonts.poppins(
-                      fontSize: 15,
-                      fontWeight: FontWeight.w700,
-                      color: _C.navy,
-                    ),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            'No. Pesanan $orderId',
+                            style: GoogleFonts.poppins(
+                              fontSize: 16,
+                              fontWeight: FontWeight.w700,
+                              color: _C.navy,
+                            ),
+                          ),
+                          Text(
+                            orderDate,
+                            style: GoogleFonts.poppins(
+                              fontSize: 11,
+                              color: _C.navy,
+                            ),
+                          ),
+                        ],
+                      ),
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 10,
+                          vertical: 4,
+                        ),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFE9D5FF),
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        child: Text(
+                          'Diproses',
+                          style: GoogleFonts.poppins(
+                            fontSize: 11,
+                            fontWeight: FontWeight.w600,
+                            color: const Color(0xFF7E22CE),
+                          ),
+                        ),
+                      ),
+                    ],
                   ),
-                  Text(
-                    args.date,
-                    style: GoogleFonts.poppins(fontSize: 11, color: _C.navy),
-                  ),
-                  const SizedBox(height: 10),
+                  const SizedBox(height: 14),
                   _buildDetailBox(s),
-                  const SizedBox(height: 22),
+                  const SizedBox(height: 20),
                   _buildCostSection(s),
                 ],
               ),
             ),
           ),
-          _buildBottomButton(context),
+          _buildBottomActionButtons(context, orderId, s),
         ],
       ),
     );
@@ -123,11 +170,14 @@ class OrderDetailPage extends StatelessWidget {
             behavior: HitTestBehavior.opaque,
             child: const Padding(
               padding: EdgeInsets.all(4),
-              child: Icon(Icons.arrow_back_ios_new_rounded,
-                  size: 16, color: _C.navy),
+              child: Icon(
+                Icons.arrow_back_ios_new_rounded,
+                size: 18,
+                color: _C.navy,
+              ),
             ),
           ),
-          const SizedBox(width: 4),
+          const SizedBox(width: 6),
           Text(
             'Detail Pesanan',
             style: GoogleFonts.poppins(
@@ -145,10 +195,10 @@ class OrderDetailPage extends StatelessWidget {
   Widget _buildDetailBox(OrderSummary s) {
     return Container(
       width: double.infinity,
-      padding: const EdgeInsets.fromLTRB(12, 12, 12, 14),
+      padding: const EdgeInsets.fromLTRB(14, 12, 14, 14),
       decoration: BoxDecoration(
         color: Colors.white,
-        borderRadius: BorderRadius.circular(6),
+        borderRadius: BorderRadius.circular(10),
         border: Border.all(color: _C.border),
       ),
       child: Column(
@@ -160,7 +210,7 @@ class OrderDetailPage extends StatelessWidget {
           _DetailRow('Deterjen', s.deterjen),
           _DetailRow('Pewangi', s.pewangi),
           _DetailRow('Metode Pengantaran', s.metode),
-          _DetailRow('Jadwal Penjemputan', s.jadwal),
+          _DetailRow('Jadwal Penjemputan / Siap', s.jadwal),
           _DetailRow('Alamat', s.alamat),
         ],
       ),
@@ -183,17 +233,17 @@ class OrderDetailPage extends StatelessWidget {
         const SizedBox(height: 8),
         Container(
           width: double.infinity,
-          padding: const EdgeInsets.fromLTRB(12, 8, 12, 8),
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
           decoration: BoxDecoration(
             color: Colors.white,
-            borderRadius: BorderRadius.circular(6),
+            borderRadius: BorderRadius.circular(10),
             border: Border.all(color: _C.border),
           ),
           child: Column(
             children: [
               for (final item in s.biaya)
                 Padding(
-                  padding: const EdgeInsets.symmetric(vertical: 2),
+                  padding: const EdgeInsets.symmetric(vertical: 3),
                   child: Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
@@ -201,13 +251,18 @@ class OrderDetailPage extends StatelessWidget {
                         child: Text(
                           item.label,
                           style: GoogleFonts.poppins(
-                              fontSize: 11, color: _C.navy),
+                            fontSize: 11.5,
+                            color: _C.navy,
+                          ),
                         ),
                       ),
                       Text(
                         item.amount,
                         style: GoogleFonts.poppins(
-                            fontSize: 11, color: _C.navy),
+                          fontSize: 11.5,
+                          fontWeight: FontWeight.w500,
+                          color: _C.navy,
+                        ),
                       ),
                     ],
                   ),
@@ -230,7 +285,7 @@ class OrderDetailPage extends StatelessWidget {
             Text(
               s.subtotal,
               style: GoogleFonts.poppins(
-                fontSize: 14,
+                fontSize: 16,
                 fontWeight: FontWeight.w700,
                 color: _C.navy,
               ),
@@ -241,43 +296,91 @@ class OrderDetailPage extends StatelessWidget {
     );
   }
 
-  // ---- Tombol Pesan Lagi --------------------------------------------------
-  Widget _buildBottomButton(BuildContext context) {
+  // ---- Tombol Chat Admin & Pesan Lagi -------------------------------------
+  Widget _buildBottomActionButtons(
+      BuildContext context,
+      String orderId,
+      OrderSummary s,
+      ) {
     return Container(
       color: Colors.white,
       padding: EdgeInsets.fromLTRB(
-        24,
-        8,
-        24,
+        20,
+        10,
+        20,
         MediaQuery.of(context).padding.bottom + 16,
       ),
-      child: SizedBox(
-        width: double.infinity,
-        height: 42,
-        child: ElevatedButton(
-          onPressed: () => Navigator.pushNamed(context, '/booking'),
-          style: ElevatedButton.styleFrom(
-            backgroundColor: _C.button,
-            elevation: 0,
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(6),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          // Tombol Chat Admin (Menuju ke ChatRoomPage)
+          SizedBox(
+            width: double.infinity,
+            height: 44,
+            child: ElevatedButton.icon(
+              onPressed: () {
+                Navigator.pushNamed(
+                  context,
+                  '/chat-room',
+                  arguments: {
+                    'orderId': orderId,
+                    'serviceName': s.jenisLaundry,
+                    'status': 'Diproses',
+                  },
+                );
+              },
+              icon: const Icon(
+                Icons.chat_bubble_outline_rounded,
+                size: 18,
+                color: Colors.white,
+              ),
+              label: Text(
+                'Tanya Admin Pesanan Ini',
+                style: GoogleFonts.poppins(
+                  fontSize: 12.5,
+                  fontWeight: FontWeight.w600,
+                  color: Colors.white,
+                ),
+              ),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: _C.button,
+                elevation: 0,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(8),
+                ),
+              ),
             ),
           ),
-          child: Text(
-            'Pesan Lagi',
-            style: GoogleFonts.poppins(
-              fontSize: 13,
-              fontWeight: FontWeight.w700,
-              color: Colors.white,
+          const SizedBox(height: 8),
+          // Tombol Pesan Lagi
+          SizedBox(
+            width: double.infinity,
+            height: 44,
+            child: OutlinedButton(
+              onPressed: () => Navigator.pushNamed(context, '/booking'),
+              style: OutlinedButton.styleFrom(
+                side: const BorderSide(color: _C.button, width: 1.5),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(8),
+                ),
+              ),
+              child: Text(
+                'Pesan Lagi',
+                style: GoogleFonts.poppins(
+                  fontSize: 13,
+                  fontWeight: FontWeight.w700,
+                  color: _C.button,
+                ),
+              ),
             ),
           ),
-        ),
+        ],
       ),
     );
   }
 }
 
-// Satu baris di kotak detail: label tebal, nilai di bawahnya.
+// Satu baris di kotak detail
 class _DetailRow extends StatelessWidget {
   final String label;
   final String value;
@@ -287,7 +390,7 @@ class _DetailRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Padding(
-      padding: const EdgeInsets.only(bottom: 6),
+      padding: const EdgeInsets.only(bottom: 8),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [

@@ -10,6 +10,9 @@ import 'order_notification_page.dart';
 import 'order_history_page.dart';
 import 'order_confirmation_page.dart';
 import 'order_detail_page.dart';
+import 'chat_room_page.dart';
+import 'chat_list_page.dart';
+import 'profile_page.dart';
 
 void main() {
   WidgetsFlutterBinding.ensureInitialized();
@@ -47,6 +50,9 @@ class MyApp extends StatelessWidget {
         '/order-history': (context) => const OrderHistoryPage(),
         '/order-detail': (context) => const OrderDetailPage(),
         '/order-confirmation': (context) => const OrderConfirmationPage(),
+        '/chat': (context) => const ChatListPage(),
+        '/chat-room': (context) => const ChatRoomPage(),
+        '/profile': (context) => const ProfilePage(),
       },
     );
   }

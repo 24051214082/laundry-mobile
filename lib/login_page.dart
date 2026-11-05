@@ -9,6 +9,7 @@ class LoginPage extends StatefulWidget {
 }
 
 class _LoginPageState extends State<LoginPage> {
+  final _formKey = GlobalKey<FormState>();
   final TextEditingController _emailController = TextEditingController();
   final TextEditingController _passwordController = TextEditingController();
   bool _obscurePassword = true;
@@ -18,6 +19,127 @@ class _LoginPageState extends State<LoginPage> {
     _emailController.dispose();
     _passwordController.dispose();
     super.dispose();
+  }
+
+  void _handleLogin() {
+    // Validasi form sebelum berpindah ke halaman utama
+    if (_formKey.currentState!.validate()) {
+      Navigator.pushReplacementNamed(context, '/home');
+    }
+  }
+
+  void _showForgotPasswordDialog() {
+    final resetEmailController = TextEditingController();
+    final resetFormKey = GlobalKey<FormState>();
+
+    showDialog(
+      context: context,
+      builder: (context) {
+        return AlertDialog(
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(20),
+          ),
+          title: Text(
+            'Reset Password',
+            style: GoogleFonts.poppins(
+              fontWeight: FontWeight.w600,
+              fontSize: 18,
+              color: const Color(0xFF2C7D99),
+            ),
+          ),
+          content: Form(
+            key: resetFormKey,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'Masukkan email akunmu untuk menerima tautan reset kata sandi.',
+                  style: GoogleFonts.poppins(
+                    fontSize: 13,
+                    color: const Color(0xFF28546A),
+                  ),
+                ),
+                const SizedBox(height: 16),
+                TextFormField(
+                  controller: resetEmailController,
+                  keyboardType: TextInputType.emailAddress,
+                  style: GoogleFonts.poppins(fontSize: 14),
+                  decoration: InputDecoration(
+                    hintText: 'Email',
+                    hintStyle: GoogleFonts.poppins(
+                      color: const Color(0xFFBFD2DC),
+                      fontSize: 14,
+                    ),
+                    filled: true,
+                    fillColor: const Color(0xFFF0F7FA),
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(16),
+                      borderSide: BorderSide.none,
+                    ),
+                    prefixIcon: const Icon(
+                      Icons.mail_outline_rounded,
+                      color: Color(0xFFB5C9D5),
+                    ),
+                  ),
+                  validator: (value) {
+                    if (value == null || value.trim().isEmpty) {
+                      return 'Email wajib diisi';
+                    }
+                    final emailRegex = RegExp(r'^[\w-\.]+@([\w-]+\.)+[\w-]{2,4}$');
+                    if (!emailRegex.hasMatch(value.trim())) {
+                      return 'Format email tidak valid';
+                    }
+                    return null;
+                  },
+                ),
+              ],
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: Text(
+                'Batal',
+                style: GoogleFonts.poppins(
+                  color: Colors.grey,
+                  fontWeight: FontWeight.w500,
+                ),
+              ),
+            ),
+            ElevatedButton(
+              onPressed: () {
+                if (resetFormKey.currentState!.validate()) {
+                  Navigator.pop(context);
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(
+                      backgroundColor: const Color(0xFF338CA8),
+                      content: Text(
+                        'Tautan reset password berhasil dikirim ke ${resetEmailController.text.trim()}',
+                        style: GoogleFonts.poppins(fontSize: 12),
+                      ),
+                    ),
+                  );
+                }
+              },
+              style: ElevatedButton.styleFrom(
+                backgroundColor: const Color(0xFF338CA8),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12),
+                ),
+              ),
+              child: Text(
+                'Kirim',
+                style: GoogleFonts.poppins(
+                  color: Colors.white,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ),
+          ],
+        );
+      },
+    );
   }
 
   @override
@@ -48,7 +170,7 @@ class _LoginPageState extends State<LoginPage> {
                         Row(
                           children: List.generate(
                             3,
-                            (index) => Container(
+                                (index) => Container(
                               margin: const EdgeInsets.only(right: 5),
                               width: 6,
                               height: 6,
@@ -62,7 +184,7 @@ class _LoginPageState extends State<LoginPage> {
                         Row(
                           children: List.generate(
                             3,
-                            (index) => Container(
+                                (index) => Container(
                               margin: const EdgeInsets.only(left: 5),
                               width: 6,
                               height: 6,
@@ -78,10 +200,11 @@ class _LoginPageState extends State<LoginPage> {
                     const SizedBox(height: 16),
                     // Tampilan Logo dari Assets
                     Center(
-                      child: Image.asset(
-                        'assets/logo.png',
-                        height: 180,
-                        fit: BoxFit.contain,
+                      child: Transform.scale(
+                        scale: 1.1,
+                        child: Image.asset(
+                          'assets/logoterbaru.jpg',
+                        ),
                       ),
                     ),
                     const SizedBox(height: 8),
@@ -92,114 +215,131 @@ class _LoginPageState extends State<LoginPage> {
               // Bagian Form Input dan Teks Deskripsi
               Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 32),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.center,
-                  children: [
-                    Text(
-                      'Pakaian Bersih,\nHidup Lebih Ringan',
-                      textAlign: TextAlign.center,
-                      style: GoogleFonts.poppins(
-                        fontSize: 22,
-                        fontWeight: FontWeight.w700,
-                        height: 1.25,
-                        color: const Color(0xFF2C7D99),
-                      ),
-                    ),
-                    const SizedBox(height: 10),
-                    Text(
-                      'Layanan laundry terpercaya, untuk\nkeseharian yang lebih baik.',
-                      textAlign: TextAlign.center,
-                      style: GoogleFonts.poppins(
-                        fontSize: 12,
-                        fontWeight: FontWeight.w400,
-                        color: const Color(0xFF225567),
-                      ),
-                    ),
-                    const SizedBox(height: 32),
-
-                    // Input Email
-                    _buildPillTextField(
-                      controller: _emailController,
-                      hintText: 'Email',
-                      icon: Icons.mail_outline_rounded,
-                      keyboardType: TextInputType.emailAddress,
-                    ),
-                    const SizedBox(height: 16),
-
-                    // Input Password
-                    _buildPillTextField(
-                      controller: _passwordController,
-                      hintText: 'Password',
-                      icon: Icons.lock_outline_rounded,
-                      isPassword: true,
-                      obscureText: _obscurePassword,
-                      onToggleVisibility: () {
-                        setState(() {
-                          _obscurePassword = !_obscurePassword;
-                        });
-                      },
-                    ),
-                    const SizedBox(height: 28),
-
-                    // Tombol Log In
-                    SizedBox(
-                      width: double.infinity,
-                      height: 52,
-                      child: ElevatedButton(
-                        onPressed: () {
-                          // Navigasi langsung ke Beranda setelah klik Log In
-                          Navigator.pushReplacementNamed(context, '/home');
-                        },
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: const Color(0xFF338CA8),
-                          elevation: 3,
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(30),
-                          ),
-                        ),
-                        child: Text(
-                          'Log In',
-                          style: GoogleFonts.poppins(
-                            fontSize: 16,
-                            fontWeight: FontWeight.w600,
-                            color: Colors.white,
-                          ),
-                        ),
-                      ),
-                    ),
-                    const SizedBox(height: 24),
-
-                    // Tombol Forgot Password
-                    GestureDetector(
-                      onTap: () {
-                        // Aksi Lupa Password
-                      },
-                      child: Text(
-                        'Forgot Password',
+                child: Form(
+                  key: _formKey,
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.center,
+                    children: [
+                      Text(
+                        'Pakaian Bersih,\nHidup Lebih Ringan',
+                        textAlign: TextAlign.center,
                         style: GoogleFonts.poppins(
-                          fontSize: 13,
+                          fontSize: 22,
                           fontWeight: FontWeight.w700,
-                          color: const Color(0xFF28546A),
+                          height: 1.25,
+                          color: const Color(0xFF2C7D99),
                         ),
                       ),
-                    ),
-                    const SizedBox(height: 6),
-
-                    // Navigasi ke Sign Up menggunakan Named Route
-                    GestureDetector(
-                      onTap: () {
-                        Navigator.pushNamed(context, '/signup');
-                      },
-                      child: Text(
-                        "Don't have an account yet?",
+                      const SizedBox(height: 10),
+                      Text(
+                        'Layanan laundry terpercaya, untuk\nkeseharian yang lebih baik.',
+                        textAlign: TextAlign.center,
                         style: GoogleFonts.poppins(
-                          fontSize: 13,
+                          fontSize: 12,
                           fontWeight: FontWeight.w400,
-                          color: const Color(0xFF28546A),
+                          color: const Color(0xFF225567),
                         ),
                       ),
-                    ),
-                  ],
+                      const SizedBox(height: 32),
+
+                      // Input Email
+                      _buildPillFormField(
+                        controller: _emailController,
+                        hintText: 'Email',
+                        icon: Icons.mail_outline_rounded,
+                        keyboardType: TextInputType.emailAddress,
+                        validator: (value) {
+                          if (value == null || value.trim().isEmpty) {
+                            return 'Email tidak boleh kosong';
+                          }
+                          final emailRegex = RegExp(r'^[\w-\.]+@([\w-]+\.)+[\w-]{2,4}$');
+                          if (!emailRegex.hasMatch(value.trim())) {
+                            return 'Masukkan email yang valid (contoh: user@mail.com)';
+                          }
+                          return null;
+                        },
+                      ),
+                      const SizedBox(height: 16),
+
+                      // Input Password
+                      _buildPillFormField(
+                        controller: _passwordController,
+                        hintText: 'Password',
+                        icon: Icons.lock_outline_rounded,
+                        isPassword: true,
+                        obscureText: _obscurePassword,
+                        onToggleVisibility: () {
+                          setState(() {
+                            _obscurePassword = !_obscurePassword;
+                          });
+                        },
+                        validator: (value) {
+                          if (value == null || value.trim().isEmpty) {
+                            return 'Password tidak boleh kosong';
+                          }
+                          if (value.trim().length < 6) {
+                            return 'Password minimal 6 karakter';
+                          }
+                          return null;
+                        },
+                      ),
+                      const SizedBox(height: 28),
+
+                      // Tombol Log In
+                      SizedBox(
+                        width: double.infinity,
+                        height: 52,
+                        child: ElevatedButton(
+                          onPressed: _handleLogin,
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: const Color(0xFF338CA8),
+                            elevation: 3,
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(30),
+                            ),
+                          ),
+                          child: Text(
+                            'Log In',
+                            style: GoogleFonts.poppins(
+                              fontSize: 16,
+                              fontWeight: FontWeight.w600,
+                              color: Colors.white,
+                            ),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 24),
+
+                      // Tombol Forgot Password
+                      GestureDetector(
+                        onTap: _showForgotPasswordDialog,
+                        child: Text(
+                          'Forgot Password',
+                          style: GoogleFonts.poppins(
+                            fontSize: 13,
+                            fontWeight: FontWeight.w700,
+                            color: const Color(0xFF28546A),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 6),
+
+                      // Navigasi ke Sign Up menggunakan Named Route
+                      GestureDetector(
+                        onTap: () {
+                          Navigator.pushNamed(context, '/signup');
+                        },
+                        child: Text(
+                          "Don't have an account yet?",
+                          style: GoogleFonts.poppins(
+                            fontSize: 13,
+                            fontWeight: FontWeight.w400,
+                            color: const Color(0xFF28546A),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
               ),
             ],
@@ -209,7 +349,7 @@ class _LoginPageState extends State<LoginPage> {
     );
   }
 
-  Widget _buildPillTextField({
+  Widget _buildPillFormField({
     required TextEditingController controller,
     required String hintText,
     required IconData icon,
@@ -217,6 +357,7 @@ class _LoginPageState extends State<LoginPage> {
     bool obscureText = false,
     VoidCallback? onToggleVisibility,
     TextInputType keyboardType = TextInputType.text,
+    String? Function(String?)? validator,
   }) {
     return Container(
       decoration: BoxDecoration(
@@ -230,10 +371,11 @@ class _LoginPageState extends State<LoginPage> {
           ),
         ],
       ),
-      child: TextField(
+      child: TextFormField(
         controller: controller,
         obscureText: obscureText,
         keyboardType: keyboardType,
+        validator: validator,
         style: GoogleFonts.poppins(
           fontSize: 14,
           color: const Color(0xFF1E293B),
@@ -241,6 +383,10 @@ class _LoginPageState extends State<LoginPage> {
         decoration: InputDecoration(
           contentPadding: const EdgeInsets.symmetric(horizontal: 22, vertical: 16),
           border: InputBorder.none,
+          errorStyle: GoogleFonts.poppins(
+            fontSize: 11,
+            color: Colors.redAccent,
+          ),
           hintText: hintText,
           hintStyle: GoogleFonts.poppins(
             color: const Color(0xFFBFD2DC),
@@ -258,13 +404,13 @@ class _LoginPageState extends State<LoginPage> {
           prefixIconConstraints: const BoxConstraints(minWidth: 40),
           suffixIcon: isPassword
               ? IconButton(
-                  icon: Icon(
-                    obscureText ? Icons.visibility_off_outlined : Icons.visibility_outlined,
-                    color: const Color(0xFFB5C9D5),
-                    size: 20,
-                  ),
-                  onPressed: onToggleVisibility,
-                )
+            icon: Icon(
+              obscureText ? Icons.visibility_off_outlined : Icons.visibility_outlined,
+              color: const Color(0xFFB5C9D5),
+              size: 20,
+            ),
+            onPressed: onToggleVisibility,
+          )
               : null,
         ),
       ),

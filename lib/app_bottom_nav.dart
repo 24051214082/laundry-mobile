@@ -15,10 +15,10 @@ class AppBottomNav extends StatelessWidget {
   // Route tujuan tiap tab (sesuai routes di main.dart).
   // null = halaman belum tersedia, tap tidak melakukan apa-apa.
   static const List<String?> _routes = [
-    '/home', // Beranda
-    null, // Chat (TODO: isi '/chat' jika halamannya sudah ada)
-    '/order-history', // Riwayat
-    null, // Profil (TODO: isi route Profil jika sudah ada)
+    '/home',          // Index 0: Beranda
+    '/chat',          // Index 1: Chat
+    '/order-history', // Index 2: Riwayat
+    '/profile',       // Index 3: Profil (GANTI DARI NULL KE '/profile')
   ];
 
   @override
