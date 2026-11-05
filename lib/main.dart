@@ -7,6 +7,9 @@ import 'booking_page.dart';
 import 'customer_data_page.dart';
 import 'manage_services_page.dart';
 import 'order_notification_page.dart';
+import 'order_history_page.dart';
+import 'order_confirmation_page.dart';
+import 'order_detail_page.dart';
 
 void main() {
   WidgetsFlutterBinding.ensureInitialized();
@@ -41,6 +44,9 @@ class MyApp extends StatelessWidget {
         '/customer-data': (context) => const CustomerDataPage(),
         '/manage-services': (context) => const ManageServicesPage(),
         '/order-notification': (context) => const OrderNotificationPage(),
+        '/order-history': (context) => const OrderHistoryPage(),
+        '/order-detail': (context) => const OrderDetailPage(),
+        '/order-confirmation': (context) => const OrderConfirmationPage(),
       },
     );
   }

@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'app_bottom_nav.dart';
 
 class HomePage extends StatefulWidget {
   const HomePage({super.key});
@@ -9,8 +10,6 @@ class HomePage extends StatefulWidget {
 }
 
 class _HomePageState extends State<HomePage> {
-  int _currentIndex = 0;
-
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -71,36 +70,36 @@ class _HomePageState extends State<HomePage> {
                           onTap: () {
                             Navigator.pushNamed(context, '/order-notification');
                           },
-                        // Tombol Lonceng Notifikasi dengan Badge Merah
-                        child: Stack(
-                          clipBehavior: Clip.none,
-                          children: [
-                            Container(
-                              padding: const EdgeInsets.all(10),
-                              decoration: const BoxDecoration(
-                                color: Colors.white,
-                                shape: BoxShape.circle,
-                              ),
-                              child: const Icon(
-                                Icons.notifications_none_rounded,
-                                color: Color(0xFF1B4E6C),
-                                size: 24,
-                              ),
-                            ),
-                            Positioned(
-                              top: 2,
-                              right: 2,
-                              child: Container(
-                                width: 10,
-                                height: 10,
+                          // Tombol Lonceng Notifikasi dengan Badge Merah
+                          child: Stack(
+                            clipBehavior: Clip.none,
+                            children: [
+                              Container(
+                                padding: const EdgeInsets.all(10),
                                 decoration: const BoxDecoration(
-                                  color: Color(0xFFEF4444),
+                                  color: Colors.white,
                                   shape: BoxShape.circle,
                                 ),
+                                child: const Icon(
+                                  Icons.notifications_none_rounded,
+                                  color: Color(0xFF1B4E6C),
+                                  size: 24,
+                                ),
                               ),
-                            ),
-                          ],
-                        ),
+                              Positioned(
+                                top: 2,
+                                right: 2,
+                                child: Container(
+                                  width: 10,
+                                  height: 10,
+                                  decoration: const BoxDecoration(
+                                    color: Color(0xFFEF4444),
+                                    shape: BoxShape.circle,
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
                         ),
                         const SizedBox(width: 12),
                         // Avatar Profil
@@ -233,7 +232,7 @@ class _HomePageState extends State<HomePage> {
                       ),
                       const Icon(
                         Icons.chevron_right,
-                        color: const Color(0xFF1B4E6C),
+                        color: Color(0xFF1B4E6C),
                       ),
                     ],
                   ),
@@ -318,62 +317,8 @@ class _HomePageState extends State<HomePage> {
         ),
       ),
 
-      // Bottom Navigation Bar
-      bottomNavigationBar: Container(
-        decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: const BorderRadius.only(
-            topLeft: Radius.circular(24),
-            topRight: Radius.circular(24),
-          ),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withOpacity(0.04),
-              blurRadius: 10,
-              offset: const Offset(0, -2),
-            ),
-          ],
-        ),
-        child: BottomNavigationBar(
-          currentIndex: _currentIndex,
-          onTap: (index) {
-            setState(() {
-              _currentIndex = index;
-            });
-          },
-          type: BottomNavigationBarType.fixed,
-          backgroundColor: Colors.transparent,
-          elevation: 0,
-          selectedItemColor: const Color(0xFF338CA8),
-          unselectedItemColor: const Color(0xFF94A3B8),
-          selectedLabelStyle: GoogleFonts.poppins(
-            fontSize: 11,
-            fontWeight: FontWeight.w600,
-          ),
-          unselectedLabelStyle: GoogleFonts.poppins(
-            fontSize: 11,
-            fontWeight: FontWeight.w500,
-          ),
-          items: const [
-            BottomNavigationBarItem(
-              icon: Icon(Icons.home_rounded),
-              label: 'Beranda',
-            ),
-            BottomNavigationBarItem(
-              icon: Icon(Icons.assignment_outlined),
-              label: 'Pesanan',
-            ),
-            BottomNavigationBarItem(
-              icon: Icon(Icons.history_rounded),
-              label: 'Riwayat',
-            ),
-            BottomNavigationBarItem(
-              icon: Icon(Icons.person_rounded),
-              label: 'Profil',
-            ),
-          ],
-        ),
-      ),
+      // Bottom Navigation Bar (widget bersama)
+      bottomNavigationBar: const AppBottomNav(currentIndex: 0),
     );
   }
 

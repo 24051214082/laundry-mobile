@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'order_confirmation_page.dart';
 
 class BookingPage extends StatefulWidget {
   const BookingPage({super.key});
@@ -257,7 +258,7 @@ class _BookingPageState extends State<BookingPage> {
                     },
                     child: _buildPickerBox(
                       icon: Icons.calendar_today_outlined,
-                      text: '${_selectedDate.day} Oktober ${_selectedDate.year}',
+                      text: _tanggalText,
                     ),
                   ),
                 ),
@@ -273,7 +274,7 @@ class _BookingPageState extends State<BookingPage> {
                     },
                     child: _buildPickerBox(
                       icon: Icons.access_time_rounded,
-                      text: '${_selectedTime.hour.toString().padLeft(2, '0')}.${_selectedTime.minute.toString().padLeft(2, '0')}',
+                      text: _jamText,
                     ),
                   ),
                 ),
@@ -320,9 +321,7 @@ class _BookingPageState extends State<BookingPage> {
               width: double.infinity,
               height: 50,
               child: ElevatedButton(
-                onPressed: () {
-                  // Aksi lanjut ke Form Konfirmasi Pesanan
-                },
+                onPressed: _goToConfirmation,
                 style: ElevatedButton.styleFrom(
                   backgroundColor: const Color(0xFF284470),
                   shape: RoundedRectangleBorder(
@@ -342,6 +341,90 @@ class _BookingPageState extends State<BookingPage> {
             const SizedBox(height: 24),
           ],
         ),
+      ),
+    );
+  }
+
+  // --- Konfirmasi Pesanan ---
+
+  // Tarif (sesuaikan dengan tarif yang sebenarnya).
+  static const int _tarifMinimumKiloan = 20000;
+  static const int _biayaExpress = 5000; // TODO: sesuaikan tarif Express
+  static const int _biayaSetrika = 5000; // TODO: sesuaikan tarif Cuci + Setrika
+  static const int _biayaDeterjen = 1000;
+  static const int _biayaPewangi = 1000;
+
+  static const List<String> _namaBulan = [
+    'Januari',
+    'Februari',
+    'Maret',
+    'April',
+    'Mei',
+    'Juni',
+    'Juli',
+    'Agustus',
+    'September',
+    'Oktober',
+    'November',
+    'Desember',
+  ];
+
+  String get _tanggalText =>
+      '${_selectedDate.day} ${_namaBulan[_selectedDate.month - 1]} ${_selectedDate.year}';
+
+  String get _jamText =>
+      '${_selectedTime.hour.toString().padLeft(2, '0')}.${_selectedTime.minute.toString().padLeft(2, '0')}';
+
+  // 25000 -> 'Rp25.000'
+  String _rupiah(int value) {
+    final s = value.toString();
+    final buf = StringBuffer();
+    for (var i = 0; i < s.length; i++) {
+      if (i > 0 && (s.length - i) % 3 == 0) buf.write('.');
+      buf.write(s[i]);
+    }
+    return 'Rp$buf';
+  }
+
+  void _goToConfirmation() {
+    final biaya = <CostItem>[];
+    var subtotal = 0;
+
+    void tambah(String label, int nilai) {
+      biaya.add(CostItem(label, _rupiah(nilai)));
+      subtotal += nilai;
+    }
+
+    if (_jenisLaundry == 'Kiloan') {
+      tambah('Tarif minimum kiloan (7kg)', _tarifMinimumKiloan);
+    } else {
+      biaya.add(const CostItem('Harga per barang', 'Dikonfirmasi admin'));
+    }
+    if (_kecepatan == 'Express') tambah('Biaya Express', _biayaExpress);
+    if (_pengerjaan == 'Cuci + Setrika') tambah('Cuci + Setrika', _biayaSetrika);
+    if (_deterjen != 'tanpa') tambah('Tambahan Deterjen', _biayaDeterjen);
+    if (_pewangi != 'tanpa') tambah('Tambahan Pewangi', _biayaPewangi);
+
+    final alamat = (_metode == 'Penjemputan'
+            ? _alamatPenjemputan
+            : _alamatPengantaran)
+        .text
+        .trim();
+
+    Navigator.pushNamed(
+      context,
+      '/order-confirmation',
+      arguments: OrderSummary(
+        jenisLaundry: _jenisLaundry,
+        kecepatan: _kecepatan,
+        pengerjaan: _pengerjaan,
+        deterjen: _deterjen == 'tanpa' ? 'Tanpa deterjen' : _deterjen,
+        pewangi: _pewangi == 'tanpa' ? 'Tanpa pewangi' : _pewangi,
+        metode: _metode,
+        jadwal: '$_tanggalText - $_jamText',
+        alamat: alamat.isEmpty ? '-' : alamat,
+        biaya: biaya,
+        subtotal: _rupiah(subtotal),
       ),
     );
   }
