@@ -11,7 +11,6 @@ class HomePage extends StatefulWidget {
 }
 
 class _HomePageState extends State<HomePage> {
-  // Variabel penampung data pesanan aktif
   Map<String, dynamic> activeOrderData = {
     'orderId': '#LKN4wa123',
     'serviceName': 'Laundry Kiloan',
@@ -27,7 +26,6 @@ class _HomePageState extends State<HomePage> {
     'image': 'assets/laundrykiloan.PNG',
   };
 
-  // Diubah agar langsung mengarah ke rute '/status-pesanan'
   void _navigateToStatusPesanan() {
     Navigator.pushNamed(
       context,
@@ -46,6 +44,11 @@ class _HomePageState extends State<HomePage> {
 
   @override
   Widget build(BuildContext context) {
+    final double screenWidth = MediaQuery.of(context).size.width;
+    final double dynamicAspectRatio = screenWidth < 360
+        ? 0.74
+        : (screenWidth < 400 ? 0.78 : 0.81);
+
     return Scaffold(
       backgroundColor: const Color(0xFFD6EFFB),
       body: SafeArea(
@@ -117,7 +120,8 @@ class _HomePageState extends State<HomePage> {
                                   shape: BoxShape.circle,
                                   boxShadow: [
                                     BoxShadow(
-                                      color: Color(0xFF1B4E6C).withOpacity(0.08),
+                                      color: const Color(0xFF1B4E6C)
+                                          .withOpacity(0.08),
                                       blurRadius: 14,
                                       offset: const Offset(0, 4),
                                     ),
@@ -136,9 +140,12 @@ class _HomePageState extends State<HomePage> {
                                   width: 10,
                                   height: 10,
                                   decoration: BoxDecoration(
-                                    color: Color(0xFFEF4444),
+                                    color: const Color(0xFFEF4444),
                                     shape: BoxShape.circle,
-                                    border: Border.all(color: Colors.white, width: 2),
+                                    border: Border.all(
+                                      color: Colors.white,
+                                      width: 2,
+                                    ),
                                   ),
                                 ),
                               ),
@@ -174,9 +181,10 @@ class _HomePageState extends State<HomePage> {
                 ),
               ),
 
-              // Card Pesanan Aktif (Mengarah ke _navigateToStatusPesanan)
+              // Card Pesanan Aktif
               Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
+                padding:
+                const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
                 child: Material(
                   color: Colors.transparent,
                   child: InkWell(
@@ -214,9 +222,11 @@ class _HomePageState extends State<HomePage> {
                               borderRadius: BorderRadius.circular(20),
                             ),
                             child: Image.asset(
-                              activeOrderData['image'] ?? 'assets/laundrykiloan.PNG',
+                              activeOrderData['image'] ??
+                                  'assets/laundrykiloan.PNG',
                               fit: BoxFit.contain,
-                              errorBuilder: (context, error, stackTrace) => const Icon(
+                              errorBuilder: (context, error, stackTrace) =>
+                              const Icon(
                                 Icons.local_laundry_service_rounded,
                                 size: 42,
                                 color: Color(0xFF0284C7),
@@ -229,7 +239,8 @@ class _HomePageState extends State<HomePage> {
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
                                 Row(
-                                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                  mainAxisAlignment:
+                                  MainAxisAlignment.spaceBetween,
                                   children: [
                                     Text(
                                       'Pesanan Aktif',
@@ -341,7 +352,7 @@ class _HomePageState extends State<HomePage> {
                 ),
               ),
 
-              // Grid Katalog Layanan
+              // Grid Katalog Layanan Sesuai Urutan & Aset
               Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 20),
                 child: GridView.count(
@@ -350,38 +361,38 @@ class _HomePageState extends State<HomePage> {
                   physics: const NeverScrollableScrollPhysics(),
                   crossAxisSpacing: 14,
                   mainAxisSpacing: 14,
-                  childAspectRatio: 0.72,
+                  childAspectRatio: dynamicAspectRatio,
                   children: [
+                    // 1. Laundry Kiloan
                     _buildServiceCard(
                       title: 'Laundry Kiloan',
                       desc: 'Bersih, wangi, dan rapi setiap hari.',
                       price: 'Rp 3.000/kg',
-                      iconData: Icons.shopping_basket_rounded,
-                      gradientColors: [Color(0xFF86D7F6), Color(0xFF459DD0)],
+                      imagePath: 'assets/laundrykiloan.PNG',
                       onTap: () => _navigateToBooking('Laundry Kiloan'),
                     ),
+                    // 2. Laundry Satuan
                     _buildServiceCard(
                       title: 'Laundry Satuan',
                       desc: 'Untuk pakaian khusus dan delicate.',
                       price: 'Rp 15.000/pcs',
-                      iconData: Icons.checkroom_rounded,
-                      gradientColors: [Color(0xFFBCE1F9), Color(0xFF6DAEE2)],
+                      imagePath: 'assets/laundrysatuan2.png',
                       onTap: () => _navigateToBooking('Laundry Satuan'),
                     ),
+                    // 3. Laundry Bed Cover
                     _buildServiceCard(
                       title: 'Bed Cover',
                       desc: 'Selimut bersih, tidur nyenyak sampai pagi.',
                       price: 'Rp 25.000',
-                      iconData: Icons.bed_rounded,
-                      gradientColors: [Color(0xFFA5CFF6), Color(0xFF7098E0)],
+                      imagePath: 'assets/laundrybedcover.PNG',
                       onTap: () => _navigateToBooking('Bed Cover'),
                     ),
+                    // 4. Laundry Boneka
                     _buildServiceCard(
                       title: 'Boneka',
                       desc: 'Si kesayangan kembali wangi dan fluffy!',
                       price: 'Rp 15.000',
-                      iconData: Icons.pets_rounded,
-                      gradientColors: [Color(0xFFF9D5AF), Color(0xFFE5A170)],
+                      imagePath: 'assets/laundryboneka.PNG',
                       onTap: () => _navigateToBooking('Boneka'),
                     ),
                   ],
@@ -392,8 +403,6 @@ class _HomePageState extends State<HomePage> {
           ),
         ),
       ),
-
-      // Bottom Navigation Bar (widget bersama)
       bottomNavigationBar: const AppBottomNav(currentIndex: 0),
     );
   }
@@ -402,111 +411,149 @@ class _HomePageState extends State<HomePage> {
     required String title,
     required String desc,
     required String price,
-    required IconData iconData,
-    required List<Color> gradientColors,
+    required String imagePath,
     required VoidCallback onTap,
   }) {
     return Container(
       decoration: BoxDecoration(
         color: Colors.white,
-        borderRadius: BorderRadius.circular(22),
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(
+          color: Colors.white.withOpacity(0.8),
+          width: 1.2,
+        ),
         boxShadow: [
           BoxShadow(
-            color: const Color(0xFF1B4E6C).withOpacity(0.05),
-            blurRadius: 10,
+            color: const Color(0xFF1B4E6C).withOpacity(0.06),
+            blurRadius: 12,
             offset: const Offset(0, 4),
           ),
         ],
       ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Container(
-            height: 105,
-            width: double.infinity,
-            decoration: BoxDecoration(
-              gradient: LinearGradient(
-                colors: gradientColors,
-                begin: Alignment.topLeft,
-                end: Alignment.bottomRight,
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(12, 10, 12, 12),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // Background Frame Pastel dengan Gambar Besar Langsung di Tengah
+            Container(
+              width: double.infinity,
+              height: 76,
+              decoration: BoxDecoration(
+                gradient: const LinearGradient(
+                  colors: [Color(0xFFEBF7FD), Color(0xFFD8EEFB)],
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                ),
+                borderRadius: BorderRadius.circular(16),
               ),
-              borderRadius: const BorderRadius.vertical(top: Radius.circular(22)),
-            ),
-            child: Center(
-              child: Icon(
-                iconData,
-                size: 52,
-                color: Colors.white.withOpacity(0.9),
-              ),
-            ),
-          ),
-          Expanded(
-            child: Padding(
-              padding: const EdgeInsets.all(12),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    title,
-                    style: GoogleFonts.poppins(
-                      fontSize: 12.5,
-                      fontWeight: FontWeight.w700,
-                      color: const Color(0xFF1B4E6C),
+              child: Center(
+                child: SizedBox(
+                  width: 70,
+                  height: 70,
+                  child: Image.asset(
+                    imagePath,
+                    fit: BoxFit.contain,
+                    errorBuilder: (context, error, stackTrace) => const Icon(
+                      Icons.local_laundry_service_rounded,
+                      size: 36,
+                      color: Color(0xFF338CA8),
                     ),
                   ),
-                  const SizedBox(height: 2),
-                  Expanded(
-                    child: Text(
-                      desc,
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis,
+                ),
+              ),
+            ),
+            const SizedBox(height: 8),
+
+            // Judul Layanan
+            Text(
+              title,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: GoogleFonts.poppins(
+                fontSize: 12,
+                fontWeight: FontWeight.w700,
+                color: const Color(0xFF1B4E6C),
+              ),
+            ),
+            const SizedBox(height: 2),
+
+            // Deskripsi (tinggi dikunci 28 agar tetap simetris)
+            SizedBox(
+              height: 28,
+              child: Text(
+                desc,
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+                style: GoogleFonts.poppins(
+                  fontSize: 9.2,
+                  color: const Color(0xFF64748B),
+                  height: 1.2,
+                ),
+              ),
+            ),
+            const SizedBox(height: 6),
+
+            // Start From & Harga
+            Text(
+              'Start from',
+              style: GoogleFonts.poppins(
+                fontSize: 8.5,
+                fontWeight: FontWeight.w500,
+                color: const Color(0xFF94A3B8),
+              ),
+            ),
+            FittedBox(
+              fit: BoxFit.scaleDown,
+              alignment: Alignment.centerLeft,
+              child: Text(
+                price,
+                style: GoogleFonts.poppins(
+                  fontSize: 12,
+                  fontWeight: FontWeight.w800,
+                  color: const Color(0xFF1B4E6C),
+                ),
+              ),
+            ),
+            const SizedBox(height: 8),
+
+            // Tombol "Pesan Sekarang"
+            SizedBox(
+              width: double.infinity,
+              height: 32,
+              child: ElevatedButton(
+                onPressed: onTap,
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: const Color(0xFF338CA8),
+                  elevation: 0,
+                  padding: EdgeInsets.zero,
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                ),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Text(
+                      'Pesan Sekarang',
                       style: GoogleFonts.poppins(
-                        fontSize: 9.5,
-                        color: const Color(0xFF64748B),
-                        height: 1.25,
+                        fontSize: 10.5,
+                        fontWeight: FontWeight.w600,
+                        color: Colors.white,
                       ),
                     ),
-                  ),
-                  Text(
-                    'Start from',
-                    style: GoogleFonts.poppins(
-                      fontSize: 8.5,
-                      color: const Color(0xFF94A3B8),
+                    const SizedBox(width: 4),
+                    const Icon(
+                      Icons.arrow_forward_rounded,
+                      size: 12,
+                      color: Colors.white,
                     ),
-                  ),
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      Text(
-                        price,
-                        style: GoogleFonts.poppins(
-                          fontSize: 12,
-                          fontWeight: FontWeight.w700,
-                          color: const Color(0xFF1B4E6C),
-                        ),
-                      ),
-                      GestureDetector(
-                        onTap: onTap,
-                        child: Container(
-                          padding: const EdgeInsets.all(5),
-                          decoration: const BoxDecoration(
-                            color: Color(0xFF5B429A),
-                            shape: BoxShape.circle,
-                          ),
-                          child: const Icon(
-                            Icons.arrow_forward_ios_rounded,
-                            size: 11,
-                            color: Colors.white,
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                ],
+                  ],
+                ),
               ),
             ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }

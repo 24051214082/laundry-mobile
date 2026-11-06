@@ -13,13 +13,35 @@ class _SignUpPageState extends State<SignUpPage> {
   final TextEditingController _emailController = TextEditingController();
   final TextEditingController _teleponController = TextEditingController();
   final TextEditingController _passwordController = TextEditingController();
-  final TextEditingController _konfirmasiPasswordController = TextEditingController();
+  final TextEditingController _konfirmasiPasswordController =
+  TextEditingController();
 
   bool _obscurePassword = true;
   bool _obscureConfirmPassword = true;
 
   @override
+  void initState() {
+    super.initState();
+    // Memantau perubahan teks agar status tombol selalu reaktif
+    _namaController.addListener(_onFieldChanged);
+    _emailController.addListener(_onFieldChanged);
+    _teleponController.addListener(_onFieldChanged);
+    _passwordController.addListener(_onFieldChanged);
+    _konfirmasiPasswordController.addListener(_onFieldChanged);
+  }
+
+  void _onFieldChanged() {
+    setState(() {});
+  }
+
+  @override
   void dispose() {
+    _namaController.removeListener(_onFieldChanged);
+    _emailController.removeListener(_onFieldChanged);
+    _teleponController.removeListener(_onFieldChanged);
+    _passwordController.removeListener(_onFieldChanged);
+    _konfirmasiPasswordController.removeListener(_onFieldChanged);
+
     _namaController.dispose();
     _emailController.dispose();
     _teleponController.dispose();
@@ -28,12 +50,98 @@ class _SignUpPageState extends State<SignUpPage> {
     super.dispose();
   }
 
+  // Cek apakah semua field telah diisi teks
+  bool get _isAllFieldsFilled {
+    return _namaController.text.trim().isNotEmpty &&
+        _emailController.text.trim().isNotEmpty &&
+        _teleponController.text.trim().isNotEmpty &&
+        _passwordController.text.trim().isNotEmpty &&
+        _konfirmasiPasswordController.text.trim().isNotEmpty;
+  }
+
+  // Validasi format email standar
+  bool _isEmailValid(String email) {
+    final emailRegex =
+    RegExp(r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$');
+    return emailRegex.hasMatch(email);
+  }
+
+  void _handleSignUp() {
+    final nama = _namaController.text.trim();
+    final email = _emailController.text.trim();
+    final telepon = _teleponController.text.trim();
+    final password = _passwordController.text;
+    final konfirmasiPassword = _konfirmasiPasswordController.text;
+
+    // 1. Validasi semua field terisi
+    if (nama.isEmpty ||
+        email.isEmpty ||
+        telepon.isEmpty ||
+        password.isEmpty ||
+        konfirmasiPassword.isEmpty) {
+      _showWarningSnackBar('Semua kolom data wajib diisi!');
+      return;
+    }
+
+    // 2. Validasi format email
+    if (!_isEmailValid(email)) {
+      _showWarningSnackBar('Format email tidak valid (contoh: user@gmail.com)');
+      return;
+    }
+
+    // 3. Validasi kesamaan password dan konfirmasi password
+    if (password != konfirmasiPassword) {
+      _showWarningSnackBar('Konfirmasi password tidak cocok dengan password awal!');
+      return;
+    }
+
+    // Tampilkan notifikasi berhasil dan langsung navigasi ke HomePage
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(
+          'Akun berhasil dibuat! Selamat datang di Wish You Wash.',
+          style: GoogleFonts.poppins(fontSize: 12.5, color: Colors.white),
+        ),
+        backgroundColor: const Color(0xFF16A34A),
+        behavior: SnackBarBehavior.floating,
+        duration: const Duration(milliseconds: 1500),
+      ),
+    );
+
+    // Langsung arahkan ke HomePage dan bersihkan tumpukan rute sign up/login
+    Navigator.pushNamedAndRemoveUntil(context, '/home', (route) => false);
+  }
+
+  void _showWarningSnackBar(String message) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Row(
+          children: [
+            const Icon(Icons.info_outline_rounded,
+                color: Colors.white, size: 20),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Text(
+                message,
+                style: GoogleFonts.poppins(fontSize: 12, color: Colors.white),
+              ),
+            ),
+          ],
+        ),
+        backgroundColor: const Color(0xFFEF4444),
+        behavior: SnackBarBehavior.floating,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: const Color(0xFFD6EFFB),
       body: SafeArea(
         child: SingleChildScrollView(
+          physics: const BouncingScrollPhysics(),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
@@ -139,12 +247,12 @@ class _SignUpPageState extends State<SignUpPage> {
                       width: double.infinity,
                       height: 52,
                       child: ElevatedButton(
-                        onPressed: () {
-                          // Aksi Sign Up
-                        },
+                        onPressed: _handleSignUp,
                         style: ElevatedButton.styleFrom(
-                          backgroundColor: const Color(0xFF338CA8),
-                          elevation: 3,
+                          backgroundColor: _isAllFieldsFilled
+                              ? const Color(0xFF338CA8)
+                              : const Color(0xFF338CA8).withOpacity(0.55),
+                          elevation: _isAllFieldsFilled ? 3 : 0,
                           shape: RoundedRectangleBorder(
                             borderRadius: BorderRadius.circular(30),
                           ),
@@ -224,7 +332,8 @@ class _SignUpPageState extends State<SignUpPage> {
           color: const Color(0xFF1E293B),
         ),
         decoration: InputDecoration(
-          contentPadding: const EdgeInsets.symmetric(horizontal: 22, vertical: 16),
+          contentPadding:
+          const EdgeInsets.symmetric(horizontal: 22, vertical: 16),
           border: InputBorder.none,
           hintText: hintText,
           hintStyle: GoogleFonts.poppins(
@@ -243,13 +352,15 @@ class _SignUpPageState extends State<SignUpPage> {
           prefixIconConstraints: const BoxConstraints(minWidth: 40),
           suffixIcon: isPassword
               ? IconButton(
-                  icon: Icon(
-                    obscureText ? Icons.visibility_off_outlined : Icons.visibility_outlined,
-                    color: const Color(0xFFB5C9D5),
-                    size: 20,
-                  ),
-                  onPressed: onToggleVisibility,
-                )
+            icon: Icon(
+              obscureText
+                  ? Icons.visibility_off_outlined
+                  : Icons.visibility_outlined,
+              color: const Color(0xFFB5C9D5),
+              size: 20,
+            ),
+            onPressed: onToggleVisibility,
+          )
               : null,
         ),
       ),

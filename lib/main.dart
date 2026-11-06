@@ -41,7 +41,7 @@ class MyApp extends StatelessWidget {
           primary: const Color(0xFF338CA8),
         ),
       ),
-      initialRoute: '/home',
+      initialRoute: '/login',
       routes: {
         '/login': (context) => const LoginPage(),
         '/signup': (context) => const SignUpPage(),
