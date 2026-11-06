@@ -5,6 +5,24 @@ class StatusPesananPage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // Menerima argumen data yang dikirimkan dari Navigator.pushNamed
+    final Map<String, dynamic> orderData =
+        (ModalRoute.of(context)?.settings.arguments as Map<String, dynamic>?) ??
+            {
+              'orderId': '#LKN4wa123',
+              'serviceName': 'Laundry Kiloan',
+              'weight': '5.0 kg',
+              'treatment': 'Cuci + Setrika',
+              'status': 'Diproses',
+              'estimate': '18 April 2027, 08.00',
+            };
+
+    String orderId = orderData['orderId'] ?? '#LKN4wa123';
+    String serviceName = orderData['serviceName'] ?? 'Laundry Kiloan';
+    String weight = orderData['weight'] ?? '5.0 kg';
+    String treatment = orderData['treatment'] ?? 'Cuci + Setrika';
+    String status = orderData['status'] ?? 'Diproses';
+
     return Scaffold(
       backgroundColor: const Color(0xFFF8F9FA),
       appBar: AppBar(
@@ -28,23 +46,23 @@ class StatusPesananPage extends StatelessWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // Header No Pesanan & Badge
+            // Header No Pesanan & Badge Dinamis
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
                 Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
-                  children: const [
+                  children: [
                     Text(
-                      'No. Pesanan LD001',
-                      style: TextStyle(
+                      'No. Pesanan $orderId',
+                      style: const TextStyle(
                         fontSize: 16,
                         fontWeight: FontWeight.bold,
                         color: Color(0xFF1E3A5F),
                       ),
                     ),
-                    SizedBox(height: 4),
-                    Text(
+                    const SizedBox(height: 4),
+                    const Text(
                       '22 Oktober 2026 17.20',
                       style: TextStyle(fontSize: 12, color: Colors.grey),
                     ),
@@ -56,9 +74,9 @@ class StatusPesananPage extends StatelessWidget {
                     color: const Color(0xFFEAE6F8),
                     borderRadius: BorderRadius.circular(20),
                   ),
-                  child: const Text(
-                    'Menunggu Pembayaran',
-                    style: TextStyle(
+                  child: Text(
+                    status,
+                    style: const TextStyle(
                       fontSize: 11,
                       color: Color(0xFF6C5CE7),
                       fontWeight: FontWeight.bold,
@@ -94,10 +112,10 @@ class StatusPesananPage extends StatelessWidget {
                   _buildTimelineItem(step: '1', title: 'Konfirmasi Pesanan', subtitle: '22 Oktober 2026 - 17.35', isCompleted: true, isCurrent: false, showLine: true),
                   _buildTimelineItem(step: '2', title: 'Menunggu Penjemputan', subtitle: '22 Oktober 2026 - 17.35', isCompleted: true, isCurrent: false, showLine: true),
                   _buildTimelineItem(step: '3', title: 'Cucian Dijemput dan Ditimbang', subtitle: '22 Oktober 2026 - 17.35', isCompleted: true, isCurrent: false, showLine: true),
-                  _buildTimelineItem(step: '4', title: 'Menunggu Pembayaran', subtitle: '22 Oktober 2026 - 17.35', isCompleted: false, isCurrent: true, showLine: true),
-                  _buildTimelineItem(step: '5', title: 'Pembayaran Terverifikasi', subtitle: '22 Oktober 2026 - 17.35', isCompleted: false, isCurrent: false, showLine: true),
-                  _buildTimelineItem(step: '6', title: 'Dalam Antrean', subtitle: '22 Oktober 2026 - 17.35', isCompleted: false, isCurrent: false, showLine: true),
-                  _buildTimelineItem(step: '7', title: 'Pencucian', subtitle: '22 Oktober 2026 - 17.35', isCompleted: false, isCurrent: false, showLine: true),
+                  _buildTimelineItem(step: '4', title: 'Menunggu Pembayaran', subtitle: '22 Oktober 2026 - 17.35', isCompleted: true, isCurrent: false, showLine: true),
+                  _buildTimelineItem(step: '5', title: 'Pembayaran Terverifikasi', subtitle: '22 Oktober 2026 - 17.35', isCompleted: true, isCurrent: false, showLine: true),
+                  _buildTimelineItem(step: '6', title: 'Dalam Antrean', subtitle: '22 Oktober 2026 - 17.35', isCompleted: true, isCurrent: false, showLine: true),
+                  _buildTimelineItem(step: '7', title: 'Pencucian', subtitle: '22 Oktober 2026 - 17.35', isCompleted: false, isCurrent: true, showLine: true),
                   _buildTimelineItem(step: '8', title: 'Pengeringan', subtitle: '22 Oktober 2026 - 17.35', isCompleted: false, isCurrent: false, showLine: true),
                   _buildTimelineItem(step: '9', title: 'Penyetrikaan', subtitle: '22 Oktober 2026 - 17.35', isCompleted: false, isCurrent: false, showLine: true),
                   _buildTimelineItem(step: '10', title: 'Siap Diambil/Dikirim', subtitle: '22 Oktober 2026 - 17.35', isCompleted: false, isCurrent: false, showLine: true),
@@ -107,7 +125,7 @@ class StatusPesananPage extends StatelessWidget {
             ),
             const SizedBox(height: 16),
 
-            // Card Tagihan Cucian
+            // Card Tagihan Cucian (Disesuaikan dengan data aktif)
             Container(
               padding: const EdgeInsets.all(16),
               decoration: BoxDecoration(
@@ -127,13 +145,13 @@ class StatusPesananPage extends StatelessWidget {
                     ),
                   ),
                   const SizedBox(height: 4),
-                  const Text('No. Pesanan LD001', style: TextStyle(fontSize: 11, color: Colors.grey)),
+                  Text('No. Pesanan $orderId', style: const TextStyle(fontSize: 11, color: Colors.grey)),
                   const Divider(height: 20),
 
-                  _buildBillRow('Jenis Laundry', 'Kiloan'),
-                  _buildBillRow('Kecepatan Layanan', 'Express'),
-                  _buildBillRow('Pengerjaan', 'Cuci + Setrika'),
-                  _buildBillRow('Berat Aktual', '8kg'),
+                  _buildBillRow('Jenis Laundry', serviceName.contains('Kiloan') ? 'Kiloan' : 'Satuan'),
+                  _buildBillRow('Kecepatan Layanan', 'Reguler'),
+                  _buildBillRow('Pengerjaan', treatment),
+                  _buildBillRow('Berat Aktual', weight),
                   const SizedBox(height: 8),
 
                   const Text(
@@ -142,12 +160,9 @@ class StatusPesananPage extends StatelessWidget {
                   ),
                   const SizedBox(height: 8),
 
-                  _buildBillRow('Berat Minimum', 'Rp20.000'),
-                  _buildBillRow('Berat Tambahan', 'Rp3.000'),
-                  _buildBillRow('Biaya Express', 'Rpxxxxx'),
-                  _buildBillRow('Cuci + Setrika', 'Rpxxxxx'),
-                  _buildBillRow('Tambahan Deterjen', 'Rp1.000'),
-                  _buildBillRow('Tambahan Pewangi', 'Rp1.000'),
+                  _buildBillRow('Biaya Layanan', 'Rp 35.000'),
+                  _buildBillRow('Tambahan Deterjen', 'Rp 0'),
+                  _buildBillRow('Tambahan Pewangi', 'Rp 0'),
 
                   const Divider(height: 20),
 
@@ -159,14 +174,14 @@ class StatusPesananPage extends StatelessWidget {
                         style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: Color(0xFF1E3A5F)),
                       ),
                       Text(
-                        'RpXXXXX',
+                        'Rp 35.000',
                         style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Color(0xFF1E3A5F)),
                       ),
                     ],
                   ),
                   const SizedBox(height: 16),
 
-                  // Tombol Bayar Sekarang
+                  // Tombol Selesai / Status
                   SizedBox(
                     width: double.infinity,
                     height: 48,
@@ -179,7 +194,7 @@ class StatusPesananPage extends StatelessWidget {
                       ),
                       onPressed: () {},
                       child: const Text(
-                        'Bayar Sekarang',
+                        'Cek Detail Pembayaran',
                         style: TextStyle(fontSize: 14, color: Colors.white, fontWeight: FontWeight.bold),
                       ),
                     ),

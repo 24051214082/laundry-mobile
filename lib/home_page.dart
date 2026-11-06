@@ -27,10 +27,11 @@ class _HomePageState extends State<HomePage> {
     'image': 'assets/laundrykiloan.PNG',
   };
 
-  void _navigateToDetail() {
+  // Diubah agar langsung mengarah ke rute '/status-pesanan'
+  void _navigateToStatusPesanan() {
     Navigator.pushNamed(
       context,
-      '/order-detail',
+      '/status-pesanan',
       arguments: activeOrderData,
     );
   }
@@ -173,13 +174,13 @@ class _HomePageState extends State<HomePage> {
                 ),
               ),
 
-              // Card Pesanan Aktif
+              // Card Pesanan Aktif (Mengarah ke _navigateToStatusPesanan)
               Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
                 child: Material(
                   color: Colors.transparent,
                   child: InkWell(
-                    onTap: _navigateToDetail,
+                    onTap: _navigateToStatusPesanan,
                     borderRadius: BorderRadius.circular(24),
                     child: Container(
                       padding: const EdgeInsets.all(16),
@@ -357,7 +358,7 @@ class _HomePageState extends State<HomePage> {
                       price: 'Rp 3.000/kg',
                       iconData: Icons.shopping_basket_rounded,
                       gradientColors: [Color(0xFF86D7F6), Color(0xFF459DD0)],
-                      onTap: () => Navigator.pushNamed(context, '/booking'),
+                      onTap: () => _navigateToBooking('Laundry Kiloan'),
                     ),
                     _buildServiceCard(
                       title: 'Laundry Satuan',
@@ -365,7 +366,7 @@ class _HomePageState extends State<HomePage> {
                       price: 'Rp 15.000/pcs',
                       iconData: Icons.checkroom_rounded,
                       gradientColors: [Color(0xFFBCE1F9), Color(0xFF6DAEE2)],
-                      onTap: () => Navigator.pushNamed(context, '/booking'),
+                      onTap: () => _navigateToBooking('Laundry Satuan'),
                     ),
                     _buildServiceCard(
                       title: 'Bed Cover',
@@ -373,7 +374,7 @@ class _HomePageState extends State<HomePage> {
                       price: 'Rp 25.000',
                       iconData: Icons.bed_rounded,
                       gradientColors: [Color(0xFFA5CFF6), Color(0xFF7098E0)],
-                      onTap: () => Navigator.pushNamed(context, '/booking'),
+                      onTap: () => _navigateToBooking('Bed Cover'),
                     ),
                     _buildServiceCard(
                       title: 'Boneka',
@@ -381,7 +382,7 @@ class _HomePageState extends State<HomePage> {
                       price: 'Rp 15.000',
                       iconData: Icons.pets_rounded,
                       gradientColors: [Color(0xFFF9D5AF), Color(0xFFE5A170)],
-                      onTap: () => Navigator.pushNamed(context, '/booking'),
+                      onTap: () => _navigateToBooking('Boneka'),
                     ),
                   ],
                 ),
@@ -420,7 +421,6 @@ class _HomePageState extends State<HomePage> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Banner Gambar / Ilustrasi Layanan
           Container(
             height: 105,
             width: double.infinity,
@@ -440,7 +440,6 @@ class _HomePageState extends State<HomePage> {
               ),
             ),
           ),
-          // Deskripsi & Harga
           Expanded(
             child: Padding(
               padding: const EdgeInsets.all(12),
