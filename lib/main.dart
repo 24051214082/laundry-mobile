@@ -10,9 +10,12 @@ import 'order_notification_page.dart';
 import 'order_history_page.dart';
 import 'order_confirmation_page.dart';
 import 'order_detail_page.dart';
+import 'status_pesanan.dart';
 import 'chat_room_page.dart';
 import 'chat_list_page.dart';
 import 'profile_page.dart';
+import 'admin_home_page.dart';
+import 'rekapitulasi_transaksi.dart';
 
 void main() {
   WidgetsFlutterBinding.ensureInitialized();
@@ -38,7 +41,7 @@ class MyApp extends StatelessWidget {
           primary: const Color(0xFF338CA8),
         ),
       ),
-      initialRoute: '/login',
+      initialRoute: '/home',
       routes: {
         '/login': (context) => const LoginPage(),
         '/signup': (context) => const SignUpPage(),
@@ -50,9 +53,12 @@ class MyApp extends StatelessWidget {
         '/order-history': (context) => const OrderHistoryPage(),
         '/order-detail': (context) => const OrderDetailPage(),
         '/order-confirmation': (context) => const OrderConfirmationPage(),
-        '/chat': (context) => const ChatListPage(),
+        '/status-pesanan': (context) => const StatusPesananPage(),
         '/chat-room': (context) => const ChatRoomPage(),
+        '/chat': (context) => const ChatListPage(),
         '/profile': (context) => const ProfilePage(),
+        '/admin-home': (context) => const AdminHomePage(),
+        '/rekapitulasi-transaksi': (context) => const RekapitulasiTransaksiPage(),
       },
     );
   }

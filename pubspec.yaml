@@ -28,6 +28,5 @@ dev_dependencies:
 flutter:
   uses-material-design: true
 
-  # Mendaftarkan folder aset gambar (logo.png)
   assets:
-    - assets/
+  - assets/logoterbaru.jpg

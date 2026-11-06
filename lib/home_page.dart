@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'app_bottom_nav.dart';
+import 'status_pesanan.dart';
 
 class HomePage extends StatefulWidget {
   const HomePage({super.key});
@@ -52,9 +53,9 @@ class _HomePageState extends State<HomePage> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              // ==================== Header Profil & Sapaan ====================
+              // Header Profil & Sapaan
               Padding(
-                padding: const EdgeInsets.fromLTRB(22, 22, 22, 16),
+                padding: const EdgeInsets.fromLTRB(24, 20, 24, 16),
                 child: Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
@@ -64,7 +65,7 @@ class _HomePageState extends State<HomePage> {
                         Text(
                           'Halo,',
                           style: GoogleFonts.poppins(
-                            fontSize: 15,
+                            fontSize: 16,
                             fontWeight: FontWeight.w400,
                             color: const Color(0xFF1E465D),
                           ),
@@ -80,11 +81,11 @@ class _HomePageState extends State<HomePage> {
                                 letterSpacing: -0.5,
                               ),
                             ),
-                            const SizedBox(width: 6),
+                            const SizedBox(width: 8),
                             const Icon(
-                              Icons.favorite_rounded,
+                              Icons.favorite,
                               color: Color(0xFF9333EA),
-                              size: 24,
+                              size: 26,
                             ),
                           ],
                         ),
@@ -92,8 +93,7 @@ class _HomePageState extends State<HomePage> {
                         Text(
                           'Saatnya pakaian bersih lagi!',
                           style: GoogleFonts.poppins(
-                            fontSize: 12.5,
-                            fontWeight: FontWeight.w400,
+                            fontSize: 13,
                             color: const Color(0xFF2E637E),
                           ),
                         ),
@@ -110,13 +110,13 @@ class _HomePageState extends State<HomePage> {
                             clipBehavior: Clip.none,
                             children: [
                               Container(
-                                padding: const EdgeInsets.all(11),
+                                padding: const EdgeInsets.all(10),
                                 decoration: BoxDecoration(
                                   color: Colors.white,
                                   shape: BoxShape.circle,
                                   boxShadow: [
                                     BoxShadow(
-                                      color: const Color(0xFF1B4E6C).withOpacity(0.08),
+                                      color: Color(0xFF1B4E6C).withOpacity(0.08),
                                       blurRadius: 14,
                                       offset: const Offset(0, 4),
                                     ),
@@ -125,7 +125,7 @@ class _HomePageState extends State<HomePage> {
                                 child: const Icon(
                                   Icons.notifications_none_rounded,
                                   color: Color(0xFF1B4E6C),
-                                  size: 23,
+                                  size: 24,
                                 ),
                               ),
                               Positioned(
@@ -135,7 +135,7 @@ class _HomePageState extends State<HomePage> {
                                   width: 10,
                                   height: 10,
                                   decoration: BoxDecoration(
-                                    color: const Color(0xFFEF4444),
+                                    color: Color(0xFFEF4444),
                                     shape: BoxShape.circle,
                                     border: Border.all(color: Colors.white, width: 2),
                                   ),
@@ -147,8 +147,8 @@ class _HomePageState extends State<HomePage> {
                         const SizedBox(width: 12),
                         // Avatar Profil
                         Container(
-                          width: 46,
-                          height: 46,
+                          width: 44,
+                          height: 44,
                           decoration: BoxDecoration(
                             shape: BoxShape.circle,
                             border: Border.all(color: Colors.white, width: 2.5),
@@ -173,7 +173,7 @@ class _HomePageState extends State<HomePage> {
                 ),
               ),
 
-              // ==================== Card Pesanan Aktif ====================
+              // Card Pesanan Aktif
               Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
                 child: Material(
@@ -314,40 +314,33 @@ class _HomePageState extends State<HomePage> {
                 ),
               ),
 
-              // ==================== Sub-header Katalog Layanan ====================
+              // Sub-header Katalog Layanan
               Padding(
-                padding: const EdgeInsets.fromLTRB(22, 24, 22, 14),
+                padding: const EdgeInsets.fromLTRB(24, 20, 24, 12),
                 child: Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
                     Text(
                       'Pilih Layanan Laundry',
                       style: GoogleFonts.poppins(
-                        fontSize: 17,
+                        fontSize: 16,
                         fontWeight: FontWeight.w700,
                         color: const Color(0xFF1B4E6C),
                       ),
                     ),
-                    InkWell(
-                      onTap: () {},
-                      borderRadius: BorderRadius.circular(6),
-                      child: Padding(
-                        padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
-                        child: Text(
-                          'Lihat Semua',
-                          style: GoogleFonts.poppins(
-                            fontSize: 12.5,
-                            fontWeight: FontWeight.w600,
-                            color: const Color(0xFF338CA8),
-                          ),
-                        ),
+                    Text(
+                      'Lihat Semua',
+                      style: GoogleFonts.poppins(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w500,
+                        color: const Color(0xFF338CA8),
                       ),
                     ),
                   ],
                 ),
               ),
 
-              // ==================== Grid Katalog Layanan ====================
+              // Grid Katalog Layanan
               Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 20),
                 child: GridView.count(
@@ -356,44 +349,50 @@ class _HomePageState extends State<HomePage> {
                   physics: const NeverScrollableScrollPhysics(),
                   crossAxisSpacing: 14,
                   mainAxisSpacing: 14,
-                  childAspectRatio: 0.75,
+                  childAspectRatio: 0.72,
                   children: [
                     _buildServiceCard(
                       title: 'Laundry Kiloan',
                       desc: 'Bersih, wangi, dan rapi setiap hari.',
                       price: 'Rp 3.000/kg',
-                      imagePath: 'assets/laundrykiloan.PNG',
-                      onTap: () => _navigateToBooking('Laundry Kiloan'),
+                      iconData: Icons.shopping_basket_rounded,
+                      gradientColors: [Color(0xFF86D7F6), Color(0xFF459DD0)],
+                      onTap: () => Navigator.pushNamed(context, '/booking'),
                     ),
                     _buildServiceCard(
                       title: 'Laundry Satuan',
                       desc: 'Untuk pakaian khusus dan delicate.',
                       price: 'Rp 15.000/pcs',
-                      imagePath: 'assets/laundrysatuan2.png',
-                      onTap: () => _navigateToBooking('Laundry Satuan'),
+                      iconData: Icons.checkroom_rounded,
+                      gradientColors: [Color(0xFFBCE1F9), Color(0xFF6DAEE2)],
+                      onTap: () => Navigator.pushNamed(context, '/booking'),
                     ),
                     _buildServiceCard(
                       title: 'Bed Cover',
                       desc: 'Selimut bersih, tidur nyenyak sampai pagi.',
                       price: 'Rp 25.000',
-                      imagePath: 'assets/laundrybedcover.PNG',
-                      onTap: () => _navigateToBooking('Bed Cover'),
+                      iconData: Icons.bed_rounded,
+                      gradientColors: [Color(0xFFA5CFF6), Color(0xFF7098E0)],
+                      onTap: () => Navigator.pushNamed(context, '/booking'),
                     ),
                     _buildServiceCard(
                       title: 'Boneka',
                       desc: 'Si kesayangan kembali wangi dan fluffy!',
                       price: 'Rp 15.000',
-                      imagePath: 'assets/laundryboneka.PNG',
-                      onTap: () => _navigateToBooking('Boneka'),
+                      iconData: Icons.pets_rounded,
+                      gradientColors: [Color(0xFFF9D5AF), Color(0xFFE5A170)],
+                      onTap: () => Navigator.pushNamed(context, '/booking'),
                     ),
                   ],
                 ),
               ),
-              const SizedBox(height: 32),
+              const SizedBox(height: 30),
             ],
           ),
         ),
       ),
+
+      // Bottom Navigation Bar (widget bersama)
       bottomNavigationBar: const AppBottomNav(currentIndex: 0),
     );
   }
@@ -402,137 +401,113 @@ class _HomePageState extends State<HomePage> {
     required String title,
     required String desc,
     required String price,
-    required String imagePath,
+    required IconData iconData,
+    required List<Color> gradientColors,
     required VoidCallback onTap,
   }) {
     return Container(
       decoration: BoxDecoration(
         color: Colors.white,
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(
-          color: Colors.white.withOpacity(0.8),
-          width: 1.2,
-        ),
+        borderRadius: BorderRadius.circular(22),
         boxShadow: [
           BoxShadow(
-            color: const Color(0xFF1B4E6C).withOpacity(0.06),
-            blurRadius: 12,
+            color: const Color(0xFF1B4E6C).withOpacity(0.05),
+            blurRadius: 10,
             offset: const Offset(0, 4),
           ),
         ],
       ),
-      child: Padding(
-        padding: const EdgeInsets.all(12),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Container(
-              width: double.infinity,
-              height: 92,
-              decoration: BoxDecoration(
-                gradient: const LinearGradient(
-                  colors: [
-                    Color(0xFFEBF7FD),
-                    Color(0xFFD8EEFB),
-                  ],
-                  begin: Alignment.topLeft,
-                  end: Alignment.bottomRight,
-                ),
-                borderRadius: BorderRadius.circular(16),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // Banner Gambar / Ilustrasi Layanan
+          Container(
+            height: 105,
+            width: double.infinity,
+            decoration: BoxDecoration(
+              gradient: LinearGradient(
+                colors: gradientColors,
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
               ),
-              child: Center(
-                child: SizedBox(
-                  width: 76,
-                  height: 76,
-                  child: Image.asset(
-                    imagePath,
-                    fit: BoxFit.contain,
-                    errorBuilder: (context, error, stackTrace) => const Icon(
-                      Icons.dry_cleaning_rounded,
-                      size: 42,
-                      color: Color(0xFF338CA8),
+              borderRadius: const BorderRadius.vertical(top: Radius.circular(22)),
+            ),
+            child: Center(
+              child: Icon(
+                iconData,
+                size: 52,
+                color: Colors.white.withOpacity(0.9),
+              ),
+            ),
+          ),
+          // Deskripsi & Harga
+          Expanded(
+            child: Padding(
+              padding: const EdgeInsets.all(12),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    title,
+                    style: GoogleFonts.poppins(
+                      fontSize: 12.5,
+                      fontWeight: FontWeight.w700,
+                      color: const Color(0xFF1B4E6C),
                     ),
                   ),
-                ),
-              ),
-            ),
-            const SizedBox(height: 8),
-            Text(
-              title,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: GoogleFonts.poppins(
-                fontSize: 13,
-                fontWeight: FontWeight.w700,
-                color: const Color(0xFF1B4E6C),
-              ),
-            ),
-            const SizedBox(height: 2),
-            Text(
-              desc,
-              maxLines: 2,
-              overflow: TextOverflow.ellipsis,
-              style: GoogleFonts.poppins(
-                fontSize: 9.5,
-                color: const Color(0xFF64748B),
-                height: 1.25,
-              ),
-            ),
-            const SizedBox(height: 8),
-            Text(
-              'Start from',
-              style: GoogleFonts.poppins(
-                fontSize: 8.5,
-                fontWeight: FontWeight.w500,
-                color: const Color(0xFF94A3B8),
-              ),
-            ),
-            Text(
-              price,
-              style: GoogleFonts.poppins(
-                fontSize: 12,
-                fontWeight: FontWeight.w800,
-                color: const Color(0xFF1B4E6C),
-              ),
-            ),
-            const SizedBox(height: 8),
-            SizedBox(
-              width: double.infinity,
-              height: 32,
-              child: ElevatedButton(
-                onPressed: onTap,
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: const Color(0xFF338CA8),
-                  elevation: 0,
-                  padding: EdgeInsets.zero,
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(10),
-                  ),
-                ),
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    Text(
-                      'Pesan Sekarang',
+                  const SizedBox(height: 2),
+                  Expanded(
+                    child: Text(
+                      desc,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
                       style: GoogleFonts.poppins(
-                        fontSize: 10.5,
-                        fontWeight: FontWeight.w600,
-                        color: Colors.white,
+                        fontSize: 9.5,
+                        color: const Color(0xFF64748B),
+                        height: 1.25,
                       ),
                     ),
-                    const SizedBox(width: 4),
-                    const Icon(
-                      Icons.arrow_forward_rounded,
-                      size: 12,
-                      color: Colors.white,
+                  ),
+                  Text(
+                    'Start from',
+                    style: GoogleFonts.poppins(
+                      fontSize: 8.5,
+                      color: const Color(0xFF94A3B8),
                     ),
-                  ],
-                ),
+                  ),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Text(
+                        price,
+                        style: GoogleFonts.poppins(
+                          fontSize: 12,
+                          fontWeight: FontWeight.w700,
+                          color: const Color(0xFF1B4E6C),
+                        ),
+                      ),
+                      GestureDetector(
+                        onTap: onTap,
+                        child: Container(
+                          padding: const EdgeInsets.all(5),
+                          decoration: const BoxDecoration(
+                            color: Color(0xFF5B429A),
+                            shape: BoxShape.circle,
+                          ),
+                          child: const Icon(
+                            Icons.arrow_forward_ios_rounded,
+                            size: 11,
+                            color: Colors.white,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
               ),
             ),
-          ],
-        ),
+          ),
+        ],
       ),
     );
   }
