@@ -96,7 +96,11 @@ class AdminHomePage extends StatelessWidget {
             ],
           ),
         ),
-        Stack(
+        GestureDetector(
+          onTap: () {
+            Navigator.pushNamed(context, '/admin-notification');
+          },
+        child: Stack(
           clipBehavior: Clip.none,
           children: [
             Container(
@@ -125,6 +129,7 @@ class AdminHomePage extends StatelessWidget {
               ),
             ),
           ],
+        ),
         ),
         const SizedBox(width: 10),
         GestureDetector(

@@ -1,4 +1,3 @@
-
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 
@@ -18,15 +17,14 @@ class ChatRoomPage extends StatefulWidget {
 }
 
 class _ChatRoomPageState extends State<ChatRoomPage> {
-  final TextEditingController _msgController =
-  TextEditingController();
+  final TextEditingController _msgController = TextEditingController();
 
   // Daftar pesan percakapan
-  final List<Map<String, dynamic>> _messages = [
+  final List _messages = [
     {
       'isUser': false,
       'text':
-      'Halo Kak Zea! Ada yang bisa kami bantu terkait pesanan laundry-nya?',
+          'Halo Kak Zea! Ada yang bisa kami bantu terkait pesanan laundry-nya?',
       'time': '09:15',
     },
   ];
@@ -61,21 +59,17 @@ class _ChatRoomPageState extends State<ChatRoomPage> {
   Widget build(BuildContext context) {
     // Menerima argumen dari Order Detail atau Chat List
     final args =
-    ModalRoute.of(context)?.settings.arguments
-    as Map<String, dynamic>?;
+        ModalRoute.of(context)?.settings.arguments as Map<String, dynamic>?;
 
-    final String orderId =
-        args?['orderId']?.toString() ?? '#LKN4wa123';
+    final String orderId = args?['orderId']?.toString() ?? '#LKN4wa123';
 
     final String serviceName =
         args?['serviceName']?.toString() ?? 'Laundry Kiloan 5 kg';
 
-    final String status =
-        args?['status']?.toString() ?? 'Diproses';
+    final String status = args?['status']?.toString() ?? 'Diproses';
 
     return Scaffold(
       backgroundColor: const Color(0xFFF8FAFC),
-
       appBar: AppBar(
         backgroundColor: _C.headerBlue,
         elevation: 0,
@@ -128,7 +122,6 @@ class _ChatRoomPageState extends State<ChatRoomPage> {
           ],
         ),
       ),
-
       body: Column(
         children: [
           // Banner Ringkasan Pesanan
@@ -141,7 +134,7 @@ class _ChatRoomPageState extends State<ChatRoomPage> {
               color: Colors.white,
               boxShadow: [
                 BoxShadow(
-                  color: Colors.black.withOpacity(0.04),
+                  color: Colors.black.withValues(alpha: 0.04),
                   blurRadius: 6,
                   offset: const Offset(0, 3),
                 ),
@@ -162,7 +155,6 @@ class _ChatRoomPageState extends State<ChatRoomPage> {
                   ),
                 ),
                 const SizedBox(width: 12),
-
                 Expanded(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
@@ -209,10 +201,30 @@ class _ChatRoomPageState extends State<ChatRoomPage> {
                   ),
                 ),
 
+                // ⬇️ UBAHAN DI SINI: Navigasi langsung ke halaman Status Pesanan
                 TextButton(
-                  onPressed: () => Navigator.pop(context),
+                  onPressed: () {
+                    Navigator.pushNamed(
+                      context,
+                      '/status-pesanan',
+                      arguments: {
+                        'orderId': orderId,
+                        'serviceName': serviceName,
+                        'status': status,
+                        'weight': '5.0 kg',
+                        'treatment': 'Cuci + Setrika',
+                        'perfume': 'Ocean Fresh',
+                        'detergent': 'Anti Bakteri',
+                        'method': 'Antar Jemput Driver',
+                        'address': 'Jl. Ketintang Baru No. 12, Surabaya',
+                        'totalPrice': 'Rp 35.000',
+                        'estimate': '18 April 2027, 08.00',
+                        'image': 'assets/laundrykiloan.PNG',
+                      },
+                    );
+                  },
                   child: Text(
-                    'Lihat Nota',
+                    'Status Pesanan',
                     style: GoogleFonts.poppins(
                       fontSize: 11,
                       fontWeight: FontWeight.w600,
@@ -235,30 +247,24 @@ class _ChatRoomPageState extends State<ChatRoomPage> {
 
                 final bool isUser = msg['isUser'] == true;
 
-                final String textContent =
-                (msg['text'] ?? '').toString();
+                final String textContent = (msg['text'] ?? '').toString();
 
-                final String timeContent =
-                (msg['time'] ?? '').toString();
+                final String timeContent = (msg['time'] ?? '').toString();
 
                 return Align(
-                  alignment: isUser
-                      ? Alignment.centerRight
-                      : Alignment.centerLeft,
+                  alignment:
+                      isUser ? Alignment.centerRight : Alignment.centerLeft,
                   child: Container(
                     margin: const EdgeInsets.only(bottom: 12),
                     constraints: BoxConstraints(
-                      maxWidth:
-                      MediaQuery.of(context).size.width * 0.76,
+                      maxWidth: MediaQuery.of(context).size.width * 0.76,
                     ),
                     padding: const EdgeInsets.symmetric(
                       horizontal: 14,
                       vertical: 10,
                     ),
                     decoration: BoxDecoration(
-                      color: isUser
-                          ? _C.bubbleUser
-                          : _C.bubbleAdmin,
+                      color: isUser ? _C.bubbleUser : _C.bubbleAdmin,
                       borderRadius: BorderRadius.only(
                         topLeft: const Radius.circular(16),
                         topRight: const Radius.circular(16),
@@ -271,7 +277,7 @@ class _ChatRoomPageState extends State<ChatRoomPage> {
                       ),
                       boxShadow: [
                         BoxShadow(
-                          color: Colors.black.withOpacity(0.03),
+                          color: Colors.black.withValues(alpha: 0.03),
                           blurRadius: 4,
                           offset: const Offset(0, 2),
                         ),
@@ -340,8 +346,7 @@ class _ChatRoomPageState extends State<ChatRoomPage> {
                       controller: _msgController,
                       style: GoogleFonts.poppins(fontSize: 12.5),
                       decoration: InputDecoration(
-                        hintText:
-                        'Tanyakan sesuatu tentang pesanan ini...',
+                        hintText: 'Tanyakan sesuatu tentang pesanan ini...',
                         hintStyle: GoogleFonts.poppins(
                           fontSize: 12,
                           color: const Color(0xFF94A3B8),
@@ -352,9 +357,7 @@ class _ChatRoomPageState extends State<ChatRoomPage> {
                     ),
                   ),
                 ),
-
                 const SizedBox(width: 8),
-
                 GestureDetector(
                   onTap: _sendMessage,
                   child: Container(

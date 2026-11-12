@@ -14,6 +14,19 @@ class _LoginPageState extends State<LoginPage> {
   final TextEditingController _passwordController = TextEditingController();
   bool _obscurePassword = true;
 
+  // ⬇️ TAMBAHAN 1: Kredensial Khusus Admin & Fungsi Hash Sederhana
+  static const String _adminEmail = 'admin@wishyouwash.com';
+    // Langsung hitung otomatis dari teks 'admin123' biar 100% akurat
+    late final int _adminPasswordHash = _simpleHash('admin123');
+
+  int _simpleHash(String text) {
+    int hash = 0;
+    for (int i = 0; i < text.length; i++) {
+      hash = 31 * hash + text.codeUnitAt(i);
+    }
+    return hash;
+  }
+
   @override
   void dispose() {
     _emailController.dispose();
@@ -21,9 +34,31 @@ class _LoginPageState extends State<LoginPage> {
     super.dispose();
   }
 
+  // ⬇️ TAMBAHAN 2: Pengecekan Role Admin vs Customer saat Login
   void _handleLogin() {
-    // Validasi form sebelum berpindah ke halaman utama
     if (_formKey.currentState!.validate()) {
+      final email = _emailController.text.trim().toLowerCase();
+      final password = _passwordController.text;
+
+      // 1. Cek jika menggunakan email Admin
+      if (email == _adminEmail) {
+        if (_simpleHash(password) == _adminPasswordHash) {
+          Navigator.pushReplacementNamed(context, '/admin-home');
+        } else {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              backgroundColor: Colors.redAccent,
+              content: Text(
+                'Password Admin salah!',
+                style: GoogleFonts.poppins(fontSize: 12),
+              ),
+            ),
+          );
+        }
+        return;
+      }
+
+      // 2. Selain email admin, masuk ke halaman utama Customer
       Navigator.pushReplacementNamed(context, '/home');
     }
   }
@@ -86,7 +121,8 @@ class _LoginPageState extends State<LoginPage> {
                     if (value == null || value.trim().isEmpty) {
                       return 'Email wajib diisi';
                     }
-                    final emailRegex = RegExp(r'^[\w-\.]+@([\w-]+\.)+[\w-]{2,4}$');
+                    final emailRegex =
+                        RegExp(r'^[\w-\.]+@([\w-]+\.)+[\w-]{2,4}$');
                     if (!emailRegex.hasMatch(value.trim())) {
                       return 'Format email tidak valid';
                     }
@@ -160,7 +196,8 @@ class _LoginPageState extends State<LoginPage> {
                     bottomRight: Radius.circular(36),
                   ),
                 ),
-                padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 20),
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 24, vertical: 20),
                 child: Column(
                   children: [
                     // Tiga titik hiasan kiri dan kanan atas
@@ -170,7 +207,7 @@ class _LoginPageState extends State<LoginPage> {
                         Row(
                           children: List.generate(
                             3,
-                                (index) => Container(
+                            (index) => Container(
                               margin: const EdgeInsets.only(right: 5),
                               width: 6,
                               height: 6,
@@ -184,7 +221,7 @@ class _LoginPageState extends State<LoginPage> {
                         Row(
                           children: List.generate(
                             3,
-                                (index) => Container(
+                            (index) => Container(
                               margin: const EdgeInsets.only(left: 5),
                               width: 6,
                               height: 6,
@@ -214,7 +251,8 @@ class _LoginPageState extends State<LoginPage> {
 
               // Bagian Form Input dan Teks Deskripsi
               Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 32),
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 32, vertical: 32),
                 child: Form(
                   key: _formKey,
                   child: Column(
@@ -252,7 +290,8 @@ class _LoginPageState extends State<LoginPage> {
                           if (value == null || value.trim().isEmpty) {
                             return 'Email tidak boleh kosong';
                           }
-                          final emailRegex = RegExp(r'^[\w-\.]+@([\w-]+\.)+[\w-]{2,4}$');
+                          final emailRegex =
+                              RegExp(r'^[\w-\.]+@([\w-]+\.)+[\w-]{2,4}$');
                           if (!emailRegex.hasMatch(value.trim())) {
                             return 'Masukkan email yang valid (contoh: user@mail.com)';
                           }
@@ -365,7 +404,7 @@ class _LoginPageState extends State<LoginPage> {
         borderRadius: BorderRadius.circular(32),
         boxShadow: [
           BoxShadow(
-            color: const Color(0xFF24607B).withOpacity(0.08),
+            color: const Color(0xFF24607B).withValues(alpha: 0.08),
             blurRadius: 10,
             offset: const Offset(0, 4),
           ),
@@ -381,7 +420,8 @@ class _LoginPageState extends State<LoginPage> {
           color: const Color(0xFF1E293B),
         ),
         decoration: InputDecoration(
-          contentPadding: const EdgeInsets.symmetric(horizontal: 22, vertical: 16),
+          contentPadding:
+              const EdgeInsets.symmetric(horizontal: 22, vertical: 16),
           border: InputBorder.none,
           errorStyle: GoogleFonts.poppins(
             fontSize: 11,
@@ -404,13 +444,15 @@ class _LoginPageState extends State<LoginPage> {
           prefixIconConstraints: const BoxConstraints(minWidth: 40),
           suffixIcon: isPassword
               ? IconButton(
-            icon: Icon(
-              obscureText ? Icons.visibility_off_outlined : Icons.visibility_outlined,
-              color: const Color(0xFFB5C9D5),
-              size: 20,
-            ),
-            onPressed: onToggleVisibility,
-          )
+                  icon: Icon(
+                    obscureText
+                        ? Icons.visibility_off_outlined
+                        : Icons.visibility_outlined,
+                    color: const Color(0xFFB5C9D5),
+                    size: 20,
+                  ),
+                  onPressed: onToggleVisibility,
+                )
               : null,
         ),
       ),

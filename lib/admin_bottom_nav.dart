@@ -20,10 +20,7 @@ class AdminBottomNav extends StatelessWidget {
         Navigator.pushReplacementNamed(context, '/admin-home');
         break;
       case 1:
-        // TODO: ganti dengan route halaman Pesanan
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Halaman Pesanan belum tersedia')),
-        );
+        Navigator.pushReplacementNamed(context, '/admin-chat');
         break;
       case 2:
         Navigator.pushReplacementNamed(context, '/rekapitulasi-transaksi');
@@ -55,7 +52,7 @@ class AdminBottomNav extends StatelessWidget {
           child: Row(
             children: [
               _item(context, 0, Icons.home_outlined, Icons.home_rounded, 'Beranda'),
-              _item(context, 1, Icons.assignment_outlined, Icons.assignment_rounded, 'Pesanan'),
+              _item(context, 1, Icons.chat_bubble_outline_rounded, Icons.chat_bubble_outline_rounded, 'Chat'),
               _item(context, 2, Icons.bar_chart_outlined, Icons.bar_chart_rounded, 'Laporan'),
               _item(context, 3, Icons.person_outline_rounded, Icons.person_rounded, 'Profil'),
             ],

@@ -1,5 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'admin_chat_list_page.dart';
+import 'admin_chat_room_page.dart';
+import 'admin_notification_page.dart';
+
 import 'login_page.dart';
 import 'signup_page.dart';
 import 'home_page.dart';
@@ -61,6 +65,9 @@ class MyApp extends StatelessWidget {
         '/admin-home': (context) => const AdminHomePage(),
         '/rekapitulasi-transaksi': (context) => const RekapitulasiTransaksiPage(),
         '/admin-profile': (context) => const AdminProfilePage(),
+        '/admin-notification': (context) => const AdminNotificationPage(),
+        '/admin-chat-room': (context) => const AdminChatRoomPage(),
+        '/admin-chat': (context) => const AdminChatListPage(),
       },
     );
   }
