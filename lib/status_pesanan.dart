@@ -1,27 +1,77 @@
 import 'package:flutter/material.dart';
+import 'payment_page.dart';
 
-class StatusPesananPage extends StatelessWidget {
+class StatusPesananPage extends StatefulWidget {
   const StatusPesananPage({super.key});
 
   @override
-  Widget build(BuildContext context) {
-    // Menerima argumen data yang dikirimkan dari Navigator.pushNamed
-    final Map<String, dynamic> orderData =
-        (ModalRoute.of(context)?.settings.arguments as Map<String, dynamic>?) ??
-            {
-              'orderId': '#LKN4wa123',
-              'serviceName': 'Laundry Kiloan',
-              'weight': '5.0 kg',
-              'treatment': 'Cuci + Setrika',
-              'status': 'Diproses',
-              'estimate': '18 April 2027, 08.00',
-            };
+  State<StatusPesananPage> createState() => _StatusPesananPageState();
+}
 
-    String orderId = orderData['orderId'] ?? '#LKN4wa123';
-    String serviceName = orderData['serviceName'] ?? 'Laundry Kiloan';
-    String weight = orderData['weight'] ?? '5.0 kg';
-    String treatment = orderData['treatment'] ?? 'Cuci + Setrika';
-    String status = orderData['status'] ?? 'Diproses';
+class _StatusPesananPageState extends State<StatusPesananPage> {
+  bool _isPaid = false;
+  bool _isInit = false;
+
+  late Map<String, dynamic> _orderData;
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    if (!_isInit) {
+      _orderData =
+          (ModalRoute.of(context)?.settings.arguments as Map<String, dynamic>?) ??
+              {
+                'orderId': '#LKN4wa123',
+                'serviceName': 'Laundry Kiloan',
+                'weight': '5.0 kg',
+                'treatment': 'Cuci + Setrika',
+                'totalPrice': 'Rp 35.000',
+                'status': 'Diproses',
+                'estimate': '18 April 2027, 08.00',
+                'isPaid': false,
+              };
+
+      _isPaid = _orderData['isPaid'] ?? false;
+      _isInit = true;
+    }
+  }
+
+  Future<void> _openPaymentPage() async {
+    final String orderId = _orderData['orderId'] ?? '#LKN4wa123';
+    final String serviceName = _orderData['serviceName'] ?? 'Laundry Kiloan';
+    final String weight = _orderData['weight'] ?? '5.0 kg';
+    final String totalAmount = _orderData['totalPrice'] ?? 'Rp 35.000';
+
+    // Langsung navigasi ke PaymentPage sambil mengirim detail tagihan & status bayar
+    final result = await Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => PaymentPage(
+          orderId: orderId,
+          serviceName: '$serviceName ($weight)',
+          totalAmount: totalAmount,
+          isPaid: _isPaid,
+        ),
+      ),
+    );
+
+    // Jika pelanggan menyelesaikan pembayaran di PaymentPage, update state halaman ini
+    if (result is bool && result == true) {
+      setState(() {
+        _isPaid = true;
+        _orderData['isPaid'] = true;
+      });
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final String orderId = _orderData['orderId'] ?? '#LKN4wa123';
+    final String serviceName = _orderData['serviceName'] ?? 'Laundry Kiloan';
+    final String weight = _orderData['weight'] ?? '5.0 kg';
+    final String treatment = _orderData['treatment'] ?? 'Cuci + Setrika';
+    final String totalAmount = _orderData['totalPrice'] ?? 'Rp 35.000';
+    final String status = _orderData['status'] ?? 'Diproses';
 
     return Scaffold(
       backgroundColor: const Color(0xFFF8F9FA),
@@ -108,14 +158,28 @@ class StatusPesananPage extends StatelessWidget {
                   ),
                   const SizedBox(height: 12),
 
-                  // Timeline Item 1 - 11
+                  // Timeline Item 1 - 11 (Step 4 & 5 menyesuaikan status bayar)
                   _buildTimelineItem(step: '1', title: 'Konfirmasi Pesanan', subtitle: '22 Oktober 2026 - 17.35', isCompleted: true, isCurrent: false, showLine: true),
                   _buildTimelineItem(step: '2', title: 'Menunggu Penjemputan', subtitle: '22 Oktober 2026 - 17.35', isCompleted: true, isCurrent: false, showLine: true),
                   _buildTimelineItem(step: '3', title: 'Cucian Dijemput dan Ditimbang', subtitle: '22 Oktober 2026 - 17.35', isCompleted: true, isCurrent: false, showLine: true),
-                  _buildTimelineItem(step: '4', title: 'Menunggu Pembayaran', subtitle: '22 Oktober 2026 - 17.35', isCompleted: true, isCurrent: false, showLine: true),
-                  _buildTimelineItem(step: '5', title: 'Pembayaran Terverifikasi', subtitle: '22 Oktober 2026 - 17.35', isCompleted: true, isCurrent: false, showLine: true),
-                  _buildTimelineItem(step: '6', title: 'Dalam Antrean', subtitle: '22 Oktober 2026 - 17.35', isCompleted: true, isCurrent: false, showLine: true),
-                  _buildTimelineItem(step: '7', title: 'Pencucian', subtitle: '22 Oktober 2026 - 17.35', isCompleted: false, isCurrent: true, showLine: true),
+                  _buildTimelineItem(
+                    step: '4',
+                    title: 'Menunggu Pembayaran',
+                    subtitle: _isPaid ? 'Pembayaran Selesai' : 'Silakan selesaikan pembayaran',
+                    isCompleted: _isPaid,
+                    isCurrent: !_isPaid,
+                    showLine: true,
+                  ),
+                  _buildTimelineItem(
+                    step: '5',
+                    title: 'Pembayaran Terverifikasi',
+                    subtitle: _isPaid ? 'Terverifikasi Otomatis' : 'Menunggu pembayaran',
+                    isCompleted: _isPaid,
+                    isCurrent: false,
+                    showLine: true,
+                  ),
+                  _buildTimelineItem(step: '6', title: 'Dalam Antrean', subtitle: '22 Oktober 2026 - 17.35', isCompleted: _isPaid, isCurrent: false, showLine: true),
+                  _buildTimelineItem(step: '7', title: 'Pencucian', subtitle: '22 Oktober 2026 - 17.35', isCompleted: false, isCurrent: _isPaid, showLine: true),
                   _buildTimelineItem(step: '8', title: 'Pengeringan', subtitle: '22 Oktober 2026 - 17.35', isCompleted: false, isCurrent: false, showLine: true),
                   _buildTimelineItem(step: '9', title: 'Penyetrikaan', subtitle: '22 Oktober 2026 - 17.35', isCompleted: false, isCurrent: false, showLine: true),
                   _buildTimelineItem(step: '10', title: 'Siap Diambil/Dikirim', subtitle: '22 Oktober 2026 - 17.35', isCompleted: false, isCurrent: false, showLine: true),
@@ -125,7 +189,7 @@ class StatusPesananPage extends StatelessWidget {
             ),
             const SizedBox(height: 16),
 
-            // Card Tagihan Cucian (Disesuaikan dengan data aktif)
+            // Card Tagihan Cucian
             Container(
               padding: const EdgeInsets.all(16),
               decoration: BoxDecoration(
@@ -136,13 +200,33 @@ class StatusPesananPage extends StatelessWidget {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const Text(
-                    'Tagihan Cucian',
-                    style: TextStyle(
-                      fontSize: 14,
-                      fontWeight: FontWeight.bold,
-                      color: Color(0xFF1E3A5F),
-                    ),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      const Text(
+                        'Tagihan Cucian',
+                        style: TextStyle(
+                          fontSize: 14,
+                          fontWeight: FontWeight.bold,
+                          color: Color(0xFF1E3A5F),
+                        ),
+                      ),
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                        decoration: BoxDecoration(
+                          color: _isPaid ? const Color(0xFFDCFCE7) : const Color(0xFFFEF3C7),
+                          borderRadius: BorderRadius.circular(6),
+                        ),
+                        child: Text(
+                          _isPaid ? 'Lunas' : 'Belum Dibayar',
+                          style: TextStyle(
+                            fontSize: 10,
+                            fontWeight: FontWeight.bold,
+                            color: _isPaid ? const Color(0xFF15803D) : const Color(0xFFB45309),
+                          ),
+                        ),
+                      ),
+                    ],
                   ),
                   const SizedBox(height: 4),
                   Text('No. Pesanan $orderId', style: const TextStyle(fontSize: 11, color: Colors.grey)),
@@ -160,7 +244,7 @@ class StatusPesananPage extends StatelessWidget {
                   ),
                   const SizedBox(height: 8),
 
-                  _buildBillRow('Biaya Layanan', 'Rp 35.000'),
+                  _buildBillRow('Biaya Layanan', totalAmount),
                   _buildBillRow('Tambahan Deterjen', 'Rp 0'),
                   _buildBillRow('Tambahan Pewangi', 'Rp 0'),
 
@@ -168,20 +252,20 @@ class StatusPesananPage extends StatelessWidget {
 
                   Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: const [
-                      Text(
+                    children: [
+                      const Text(
                         'Total Tagihan',
                         style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: Color(0xFF1E3A5F)),
                       ),
                       Text(
-                        'Rp 35.000',
-                        style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Color(0xFF1E3A5F)),
+                        totalAmount,
+                        style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Color(0xFF1E3A5F)),
                       ),
                     ],
                   ),
                   const SizedBox(height: 16),
 
-                  // Tombol Selesai / Status
+                  // Tombol Cek Detail Pembayaran
                   SizedBox(
                     width: double.infinity,
                     height: 48,
@@ -192,7 +276,7 @@ class StatusPesananPage extends StatelessWidget {
                           borderRadius: BorderRadius.circular(8),
                         ),
                       ),
-                      onPressed: () {},
+                      onPressed: _openPaymentPage,
                       child: const Text(
                         'Cek Detail Pembayaran',
                         style: TextStyle(fontSize: 14, color: Colors.white, fontWeight: FontWeight.bold),

@@ -45,11 +45,6 @@ class _HomePageState extends State<HomePage> {
 
   @override
   Widget build(BuildContext context) {
-    final double screenWidth = MediaQuery.of(context).size.width;
-    final double dynamicAspectRatio = screenWidth < 360
-        ? 0.74
-        : (screenWidth < 400 ? 0.78 : 0.81);
-
     return Scaffold(
       backgroundColor: const Color(0xFFD6EFFB),
       body: SafeArea(
@@ -77,7 +72,7 @@ class _HomePageState extends State<HomePage> {
                         ),
                         Row(
                           children: [
-                           ListenableBuilder(
+                            ListenableBuilder(
                               listenable: UserProfileStore.instance,
                               builder: (context, _) => Text(
                                 UserProfileStore.instance.name.split(' ').first,
@@ -356,16 +351,18 @@ class _HomePageState extends State<HomePage> {
                 ),
               ),
 
-              // Grid Katalog Layanan Sesuai Urutan & Aset
+              // Grid Katalog Layanan (Menggunakan mainAxisExtent agar bebas overflow di semua device)
               Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 20),
-                child: GridView.count(
-                  crossAxisCount: 2,
+                child: GridView(
                   shrinkWrap: true,
                   physics: const NeverScrollableScrollPhysics(),
-                  crossAxisSpacing: 14,
-                  mainAxisSpacing: 14,
-                  childAspectRatio: dynamicAspectRatio,
+                  gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                    crossAxisCount: 2,
+                    crossAxisSpacing: 14,
+                    mainAxisSpacing: 14,
+                    mainAxisExtent: 256,
+                  ),
                   children: [
                     // 1. Laundry Kiloan
                     _buildServiceCard(
@@ -482,21 +479,19 @@ class _HomePageState extends State<HomePage> {
             ),
             const SizedBox(height: 2),
 
-            // Deskripsi (tinggi dikunci 28 agar tetap simetris)
-            SizedBox(
-              height: 28,
-              child: Text(
-                desc,
-                maxLines: 2,
-                overflow: TextOverflow.ellipsis,
-                style: GoogleFonts.poppins(
-                  fontSize: 9.2,
-                  color: const Color(0xFF64748B),
-                  height: 1.2,
-                ),
+            // Deskripsi
+            Text(
+              desc,
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+              style: GoogleFonts.poppins(
+                fontSize: 9.2,
+                color: const Color(0xFF64748B),
+                height: 1.2,
               ),
             ),
-            const SizedBox(height: 6),
+
+            const Spacer(),
 
             // Start From & Harga
             Text(

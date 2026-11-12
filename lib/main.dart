@@ -21,6 +21,7 @@ import 'admin_home_page.dart';
 import 'rekapitulasi_transaksi.dart';
 import 'admin_profile_page.dart';
 import 'manage_orders_page.dart';
+import 'payment_page.dart';
 
 void main() {
   WidgetsFlutterBinding.ensureInitialized();
@@ -46,7 +47,7 @@ class MyApp extends StatelessWidget {
           primary: const Color(0xFF338CA8),
         ),
       ),
-      initialRoute: '/manage-orders',
+      initialRoute: '/login',
       routes: {
         '/login': (context) => const LoginPage(),
         '/signup': (context) => const SignUpPage(),
@@ -69,6 +70,7 @@ class MyApp extends StatelessWidget {
         '/admin-chat-room': (context) => const AdminChatRoomPage(),
         '/admin-chat': (context) => const AdminChatListPage(),
         '/manage-orders': (context) => const ManageOrdersPage(),
+        '/payment': (context) => const PaymentPage(),
       },
     );
   }

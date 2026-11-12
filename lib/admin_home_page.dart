@@ -17,42 +17,42 @@ class AdminHomePage extends StatelessWidget {
         child: SingleChildScrollView(
           padding: const EdgeInsets.fromLTRB(20, 16, 20, 24),
           child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  _buildHeader(context),
-                  const SizedBox(height: 20),
-                  _buildSummaryCard(),
-                  const SizedBox(height: 24),
-                  _sectionTitle('Menu Utama'),
-                  const SizedBox(height: 12),
-                  _buildMenuGrid(context),
-                  const SizedBox(height: 24),
-                  _buildRecentOrdersHeader(),
-                  const SizedBox(height: 12),
-                  _buildOrderItem(
-                    code: 'L0042',
-                    name: 'Nancy',
-                    service: 'Laundry Kiloan • 5 kg',
-                    status: 'Menunggu Timbangan',
-                    statusColor: const Color(0xFF0284C7),
-                    statusBg: const Color(0xFFE0F2FE),
-                  ),
-                  _buildOrderItem(
-                    code: 'L0041',
-                    name: 'Budi',
-                    service: 'Cuci Setrika • 3 kg',
-                    status: 'Diproses',
-                    statusColor: const Color(0xFFD97706),
-                    statusBg: const Color(0xFFFEF3C7),
-                  ),
-                  _buildOrderItem(
-                    code: 'L0040',
-                    name: 'Sinta',
-                    service: 'Dry Cleaning • 2 pcs',
-                    status: 'Selesai',
-                    statusColor: const Color(0xFF16A34A),
-                    statusBg: const Color(0xFFDCFCE7),
-                  ),
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              _buildHeader(context),
+              const SizedBox(height: 20),
+              _buildSummaryCard(),
+              const SizedBox(height: 24),
+              _sectionTitle('Menu Utama'),
+              const SizedBox(height: 12),
+              _buildMenuGrid(context),
+              const SizedBox(height: 24),
+              _buildRecentOrdersHeader(context),
+              const SizedBox(height: 12),
+              _buildOrderItem(
+                code: 'L0042',
+                name: 'Nancy',
+                service: 'Laundry Kiloan • 5 kg',
+                status: 'Menunggu Timbangan',
+                statusColor: const Color(0xFF0284C7),
+                statusBg: const Color(0xFFE0F2FE),
+              ),
+              _buildOrderItem(
+                code: 'L0041',
+                name: 'Budi',
+                service: 'Cuci Setrika • 3 kg',
+                status: 'Diproses',
+                statusColor: const Color(0xFFD97706),
+                statusBg: const Color(0xFFFEF3C7),
+              ),
+              _buildOrderItem(
+                code: 'L0040',
+                name: 'Sinta',
+                service: 'Dry Cleaning • 2 pcs',
+                status: 'Selesai',
+                statusColor: const Color(0xFF16A34A),
+                statusBg: const Color(0xFFDCFCE7),
+              ),
             ],
           ),
         ),
@@ -100,36 +100,36 @@ class AdminHomePage extends StatelessWidget {
           onTap: () {
             Navigator.pushNamed(context, '/admin-notification');
           },
-        child: Stack(
-          clipBehavior: Clip.none,
-          children: [
-            Container(
-              padding: const EdgeInsets.all(10),
-              decoration: const BoxDecoration(
-                color: Colors.white,
-                shape: BoxShape.circle,
-              ),
-              child: const Icon(
-                Icons.notifications_none_rounded,
-                color: Color(0xFF2C6B8E),
-                size: 24,
-              ),
-            ),
-            Positioned(
-              top: 2,
-              right: 2,
-              child: Container(
-                width: 10,
-                height: 10,
-                decoration: BoxDecoration(
-                  color: const Color(0xFFEF4444),
+          child: Stack(
+            clipBehavior: Clip.none,
+            children: [
+              Container(
+                padding: const EdgeInsets.all(10),
+                decoration: const BoxDecoration(
+                  color: Colors.white,
                   shape: BoxShape.circle,
-                  border: Border.all(color: Colors.white, width: 1.5),
+                ),
+                child: const Icon(
+                  Icons.notifications_none_rounded,
+                  color: Color(0xFF2C6B8E),
+                  size: 24,
                 ),
               ),
-            ),
-          ],
-        ),
+              Positioned(
+                top: 2,
+                right: 2,
+                child: Container(
+                  width: 10,
+                  height: 10,
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFEF4444),
+                    shape: BoxShape.circle,
+                    border: Border.all(color: Colors.white, width: 1.5),
+                  ),
+                ),
+              ),
+            ],
+          ),
         ),
         const SizedBox(width: 10),
         GestureDetector(
@@ -183,18 +183,18 @@ class AdminHomePage extends StatelessWidget {
   }
 
   Widget _divider() => Container(
-        height: 56,
-        width: 1,
-        color: const Color(0xFFE2E8F0),
-      );
+    height: 56,
+    width: 1,
+    color: const Color(0xFFE2E8F0),
+  );
 
   Widget _summaryItem(
-    String title,
-    String count,
-    IconData icon,
-    Color color,
-    Color bg,
-  ) {
+      String title,
+      String count,
+      IconData icon,
+      Color color,
+      Color bg,
+      ) {
     return Expanded(
       child: Column(
         children: [
@@ -242,9 +242,7 @@ class AdminHomePage extends StatelessWidget {
           subtitle: 'Konfirmasi & update status',
           icon: Icons.local_laundry_service_outlined,
           color: const Color(0xFF3B82F6),
-          onTap: () {
-            // TODO: Navigasi Manajemen Pesanan
-          },
+          onTap: () => Navigator.pushNamed(context, '/manage-orders'),
         ),
         _menuCard(
           title: 'Rekap Transaksi',
@@ -336,15 +334,13 @@ class AdminHomePage extends StatelessWidget {
   }
 
   // ------------------------------------------------------- RECENT ORDERS
-  Widget _buildRecentOrdersHeader() {
+  Widget _buildRecentOrdersHeader(BuildContext context) {
     return Row(
       mainAxisAlignment: MainAxisAlignment.spaceBetween,
       children: [
         _sectionTitle('Pesanan Masuk Terbaru'),
         GestureDetector(
-          onTap: () {
-            // TODO: Navigasi ke daftar pesanan
-          },
+          onTap: () => Navigator.pushNamed(context, '/manage-orders'),
           child: Text(
             'Lihat Semua',
             style: GoogleFonts.poppins(
