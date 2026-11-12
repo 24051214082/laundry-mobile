@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 
+import 'admin_bottom_nav.dart'; // sesuaikan path folder
+
 class RekapitulasiTransaksiPage extends StatefulWidget {
   const RekapitulasiTransaksiPage({super.key});
 
@@ -9,8 +11,6 @@ class RekapitulasiTransaksiPage extends StatefulWidget {
 }
 
 class _RekapitulasiTransaksiPageState extends State<RekapitulasiTransaksiPage> {
-  int _currentIndex = 2; // Default aktif di menu Laporan
-
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -33,10 +33,10 @@ class _RekapitulasiTransaksiPageState extends State<RekapitulasiTransaksiPage> {
                       children: [
                         Row(
                           children: [
-                            // Tombol Kembali
+                            // Tombol Kembali -> ke Beranda Admin
                             GestureDetector(
                               onTap: () {
-                                Navigator.pop(context);
+                                Navigator.pushReplacementNamed(context, '/admin-home');
                               },
                               child: Container(
                                 padding: const EdgeInsets.all(8),
@@ -86,17 +86,21 @@ class _RekapitulasiTransaksiPageState extends State<RekapitulasiTransaksiPage> {
                               ),
                             ),
                             const SizedBox(width: 8),
-                            Container(
-                              width: 38,
-                              height: 38,
-                              decoration: const BoxDecoration(
-                                color: Color(0xFF3B82F6),
-                                shape: BoxShape.circle,
-                              ),
-                              child: const Icon(
-                                Icons.person,
-                                color: Colors.white,
-                                size: 22,
+                            GestureDetector(
+                              onTap: () => Navigator.pushReplacementNamed(
+                                  context, '/admin-profile'),
+                              child: Container(
+                                width: 38,
+                                height: 38,
+                                decoration: const BoxDecoration(
+                                  color: Color(0xFF3B82F6),
+                                  shape: BoxShape.circle,
+                                ),
+                                child: const Icon(
+                                  Icons.person,
+                                  color: Colors.white,
+                                  size: 22,
+                                ),
                               ),
                             ),
                           ],
@@ -390,23 +394,8 @@ class _RekapitulasiTransaksiPageState extends State<RekapitulasiTransaksiPage> {
           ),
         ),
       ),
-      // Bottom Navigation Bar
-      bottomNavigationBar: Container(
-        height: 65,
-        decoration: const BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
-        ),
-        child: Row(
-          mainAxisAlignment: MainAxisAlignment.spaceAround,
-          children: [
-            _buildNavItem(0, Icons.home_rounded, 'Beranda'),
-            _buildNavItem(1, Icons.assignment_outlined, 'Pesanan'),
-            _buildNavItem(2, Icons.bar_chart_rounded, 'Laporan'),
-            _buildNavItem(3, Icons.person_outline_rounded, 'Profil'),
-          ],
-        ),
-      ),
+      // Bottom Navigation Bar (dipakai bersama semua halaman admin)
+      bottomNavigationBar: const AdminBottomNav(currentIndex: 2),
     );
   }
 
@@ -481,46 +470,6 @@ class _RekapitulasiTransaksiPageState extends State<RekapitulasiTransaksiPage> {
                 style: GoogleFonts.poppins(fontSize: 10, fontWeight: FontWeight.w600, color: const Color(0xFF0284C7)),
               ),
             ],
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildNavItem(int index, IconData icon, String label) {
-    final isSelected = _currentIndex == index;
-    return GestureDetector(
-      onTap: () {
-        setState(() {
-          _currentIndex = index;
-        });
-
-        // Navigasi footer antar halaman
-        if (index == 0) {
-          Navigator.pushReplacementNamed(context, '/admin-home');
-        } else if (index == 1) {
-          // Tambahkan rute pesanan jika sudah ada nanti
-        } else if (index == 2) {
-          // Sedang di halaman laporan
-        } else if (index == 3) {
-          // Tambahkan rute profil jika sudah ada nanti
-        }
-      },
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Icon(
-            icon,
-            color: isSelected ? const Color(0xFF0284C7) : const Color(0xFF94A3B8),
-            size: 24,
-          ),
-          Text(
-            label,
-            style: GoogleFonts.poppins(
-              fontSize: 10,
-              fontWeight: isSelected ? FontWeight.w600 : FontWeight.w400,
-              color: isSelected ? const Color(0xFF0284C7) : const Color(0xFF94A3B8),
-            ),
           ),
         ],
       ),

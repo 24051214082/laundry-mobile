@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'order_confirmation_page.dart';
+import 'user_profile_store.dart';
 
 class BookingPage extends StatefulWidget {
   const BookingPage({super.key});
@@ -16,16 +17,17 @@ class _BookingPageState extends State<BookingPage> {
 
   // Sub-kategori khusus Satuan
   String _barangSatuan = 'Kaos';
-  final List<String> _listBarangSatuan = [
-    'Kaos',
-    'Kemeja',
-    'Celana Pendek',
-    'Celana Panjang',
-    'Jeans',
-    'Jas',
-    'Handuk',
-    'Set Seprei',
-  ];
+  // Harga MULAI DARI per item untuk Laundry Satuan (ubah angkanya di sini).
+  static const Map<String, int> _hargaSatuan = {
+    'Kaos': 15000,
+    'Kemeja': 15000,
+    'Celana Pendek': 15000,
+    'Celana Panjang': 17000,
+    'Jeans': 20000,
+    'Jas': 30000,
+    'Handuk': 15000,
+    'Set Seprei': 25000,
+  };
 
   // Kecepatan Layanan
   String _kecepatan = 'Reguler';
@@ -40,13 +42,17 @@ class _BookingPageState extends State<BookingPage> {
   // Metode Pengantaran
   String _metode = 'Penjemputan';
 
+  // Metode Pengiriman (cucian bersih kembali ke pelanggan)
+  String _pengiriman = 'Diantar Kurir';
+
   // Alamat Tetap Laundry
   static const String _alamatLaundryOutlet =
       'Jl. Ketintang Baru No. 12, Wonokromo, Surabaya (Depan UNESA Ketintang)';
 
   // Controllers
   late final TextEditingController _alamatPengantaran;
-  final TextEditingController _alamatPenjemputan = TextEditingController();
+  late final TextEditingController _alamatPenjemputan;
+  late final TextEditingController _alamatPengiriman;
   final TextEditingController _catatan = TextEditingController();
 
   DateTime _selectedDate = DateTime(2026, 11, 6);
@@ -56,6 +62,12 @@ class _BookingPageState extends State<BookingPage> {
   void initState() {
     super.initState();
     _alamatPengantaran = TextEditingController(text: _alamatLaundryOutlet);
+
+    // Alamat penjemputan & pengiriman terisi otomatis dari alamat utama
+    // di profil, tapi tetap bisa diubah khusus untuk pesanan ini.
+    final alamatUtama = UserProfileStore.instance.address;
+    _alamatPenjemputan = TextEditingController(text: alamatUtama);
+    _alamatPengiriman = TextEditingController(text: alamatUtama);
   }
 
   @override
@@ -78,11 +90,13 @@ class _BookingPageState extends State<BookingPage> {
   void dispose() {
     _alamatPengantaran.dispose();
     _alamatPenjemputan.dispose();
+    _alamatPengiriman.dispose();
     _catatan.dispose();
     super.dispose();
   }
 
   bool get _isAntarSendiri => _metode == 'Antar Sendiri';
+  bool get _isKirimKurir => _pengiriman == 'Diantar Kurir';
   bool get _isBoneka => _selectedService == 'Boneka';
   bool get _isSatuan => _selectedService == 'Laundry Satuan';
 
@@ -195,18 +209,37 @@ class _BookingPageState extends State<BookingPage> {
                 child: Wrap(
                   spacing: 8,
                   runSpacing: 6,
-                  children: _listBarangSatuan.map((item) {
+                  children: _hargaSatuan.keys.map((item) {
                     final isPicked = _barangSatuan == item;
                     return ChoiceChip(
-                      label: Text(item),
+                      label: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Text(
+                            item,
+                            style: GoogleFonts.poppins(
+                              fontSize: 11,
+                              fontWeight:
+                                  isPicked ? FontWeight.w600 : FontWeight.w400,
+                              color: isPicked
+                                  ? Colors.white
+                                  : const Color(0xFF28546A),
+                            ),
+                          ),
+                          Text(
+                            'Mulai ${_rupiah(_hargaSatuan[item]!)}',
+                            style: GoogleFonts.poppins(
+                              fontSize: 9,
+                              color: isPicked
+                                  ? Colors.white70
+                                  : const Color(0xFF64748B),
+                            ),
+                          ),
+                        ],
+                      ),
                       selected: isPicked,
                       selectedColor: const Color(0xFF338CA8),
                       backgroundColor: const Color(0xFFF0F7FA),
-                      labelStyle: GoogleFonts.poppins(
-                        fontSize: 11,
-                        fontWeight: isPicked ? FontWeight.w600 : FontWeight.w400,
-                        color: isPicked ? Colors.white : const Color(0xFF28546A),
-                      ),
                       onSelected: (selected) {
                         if (selected) {
                           setState(() => _barangSatuan = item);
@@ -214,6 +247,35 @@ class _BookingPageState extends State<BookingPage> {
                       },
                     );
                   }).toList(),
+                ),
+              ),
+              const SizedBox(height: 10),
+              Container(
+                width: double.infinity,
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFEDE9FE),
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Icon(Icons.info_outline_rounded,
+                        size: 20, color: Color(0xFF5B429A)),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        'Harga yang tertera adalah harga mulai dari (start from). '
+                        'Total tagihan akan dikonfirmasi admin setelah barang '
+                        'dilihat langsung, jadi harga akhir bisa berbeda.',
+                        style: GoogleFonts.poppins(
+                          fontSize: 10.5,
+                          color: const Color(0xFF4C1D95),
+                        ),
+                      ),
+                    ),
+                  ],
                 ),
               ),
             ],
@@ -428,8 +490,8 @@ class _BookingPageState extends State<BookingPage> {
 
             const SizedBox(height: 24),
 
-            // ================= 4. Metode Pengantaran =================
-            _buildSectionHeader('Metode Pengiriman', 'Pilih cara serah terima cucian'),
+            // ================= 4. Metode Penjemputan =================
+            _buildSectionHeader('Metode Penjemputan', 'Pilih cara cucian sampai ke outlet'),
             const SizedBox(height: 10),
             Row(
               children: [
@@ -528,8 +590,37 @@ class _BookingPageState extends State<BookingPage> {
 
             const SizedBox(height: 24),
 
+            // ================= 5b. Metode Pengiriman =================
+            _buildSectionHeader('Metode Pengiriman', 'Pilih cara menerima cucian yang sudah bersih'),
+            const SizedBox(height: 10),
+            Row(
+              children: [
+                Expanded(
+                  child: _buildDeliveryCard(
+                    icon: Icons.storefront_rounded,
+                    title: 'Ambil Sendiri',
+                    subtitle: 'Ambil di outlet',
+                    isSelected: !_isKirimKurir,
+                    onTap: () => setState(() => _pengiriman = 'Ambil Sendiri'),
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: _buildDeliveryCard(
+                    icon: Icons.two_wheeler_rounded,
+                    title: 'Diantar Kurir',
+                    subtitle: 'Kurir antar ke rumah',
+                    isSelected: _isKirimKurir,
+                    onTap: () => setState(() => _pengiriman = 'Diantar Kurir'),
+                  ),
+                ),
+              ],
+            ),
+
+            const SizedBox(height: 24),
+
             // ================= 6. Alamat Laundry =================
-            _buildSectionHeader('Alamat Outlet Laundry (Tujuan Pengantaran)', 'Lokasi cucian diproses'),
+            _buildSectionHeader('Alamat Outlet Laundry', 'Lokasi cucian diproses'),
             const SizedBox(height: 8),
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
@@ -573,28 +664,22 @@ class _BookingPageState extends State<BookingPage> {
             // Alamat Penjemputan jika Penjemputan dipilih
             if (!_isAntarSendiri) ...[
               const SizedBox(height: 18),
-              _buildSectionHeader('Alamat Penjemputan Anda', 'Kurir akan mengambil cucian di sini'),
+              _buildSectionHeader('Alamat Anda', 'Kurir akan mengambil/mengantar cucian di sini'),
               const SizedBox(height: 8),
-              Container(
-                decoration: BoxDecoration(
-                  color: Colors.white,
-                  borderRadius: BorderRadius.circular(10),
-                  border: Border.all(color: const Color(0xFF338CA8)),
-                ),
-                child: TextField(
-                  controller: _alamatPenjemputan,
-                  style: GoogleFonts.poppins(fontSize: 12.5),
-                  decoration: const InputDecoration(
-                    hintText: 'Masukkan alamat lengkap & patokan rumah...',
-                    prefixIcon: Icon(Icons.home_work_outlined, color: Color(0xFF338CA8), size: 20),
-                    border: InputBorder.none,
-                    contentPadding: EdgeInsets.symmetric(vertical: 12, horizontal: 10),
-                  ),
-                ),
-              ),
+              _buildAddressInput(_alamatPenjemputan),
             ],
 
             const SizedBox(height: 24),
+
+            // Alamat Pengiriman: hanya perlu diisi kalau cucian diantar sendiri
+            // ke outlet tapi ingin dikirim kurir saat selesai.
+            // (Kalau Penjemputan, kurir mengantar ke alamat penjemputan.)
+            if (_isKirimKurir && _isAntarSendiri) ...[
+              _buildSectionHeader('Alamat Pengiriman', 'Kurir akan mengantar cucian bersih ke sini'),
+              const SizedBox(height: 8),
+              _buildAddressInput(_alamatPengiriman),
+              const SizedBox(height: 24),
+            ],
 
             // ================= 7. Catatan =================
             _buildSectionHeader('Catatan Khusus', '(Opsional) Berikan instruksi tambahan'),
@@ -684,7 +769,20 @@ class _BookingPageState extends State<BookingPage> {
         SnackBar(
           backgroundColor: Colors.redAccent,
           content: Text(
-            'Mohon isi alamat penjemputan terlebih dahulu!',
+            'Mohon isi alamat terlebih dahulu!',
+            style: GoogleFonts.poppins(fontSize: 12),
+          ),
+        ),
+      );
+      return;
+    }
+
+    if (_isAntarSendiri && _isKirimKurir && _alamatPengiriman.text.trim().isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          backgroundColor: Colors.redAccent,
+          content: Text(
+            'Mohon isi alamat pengiriman terlebih dahulu!',
             style: GoogleFonts.poppins(fontSize: 12),
           ),
         ),
@@ -705,7 +803,9 @@ class _BookingPageState extends State<BookingPage> {
       tambah('Tarif minimum kiloan (7kg)', _tarifMinimumKiloan);
     } else if (_isSatuan) {
       labelLayanan = 'Satuan: $_barangSatuan';
-      biaya.add(CostItem('Satuan ($_barangSatuan)', 'Dihitung admin'));
+      final hargaItem = _hargaSatuan[_barangSatuan]!;
+      biaya.add(CostItem('Satuan ($_barangSatuan)', 'Mulai ${_rupiah(hargaItem)}'));
+      subtotal += hargaItem;
     } else {
       biaya.add(CostItem(_selectedService, 'Dihitung admin'));
     }
@@ -715,9 +815,12 @@ class _BookingPageState extends State<BookingPage> {
     if (_deterjen != 'tanpa') tambah('Deterjen ($_deterjen)', _biayaDeterjen);
     if (_pewangi != 'tanpa') tambah('Pewangi ($_pewangi)', _biayaPewangi);
 
-    final finalAlamat = _isAntarSendiri
+    var finalAlamat = _isAntarSendiri
         ? 'Antar ke outlet: $_alamatLaundryOutlet'
         : _alamatPenjemputan.text.trim();
+    if (_isAntarSendiri && _isKirimKurir) {
+      finalAlamat += '\nKirim ke: ${_alamatPengiriman.text.trim()}';
+    }
 
     final finalJadwal = _isAntarSendiri
         ? 'Pelanggan antar langsung ke outlet'
@@ -732,16 +835,79 @@ class _BookingPageState extends State<BookingPage> {
         pengerjaan: _pengerjaan,
         deterjen: _deterjen == 'tanpa' ? 'Standar / Bawa Sendiri' : _deterjen,
         pewangi: _pewangi == 'tanpa' ? 'Standar / Bawa Sendiri' : _pewangi,
-        metode: _metode,
+        metode: 'Jemput: $_metode • Kirim: $_pengiriman',
         jadwal: finalJadwal,
         alamat: finalAlamat,
         biaya: biaya,
-        subtotal: _selectedService == 'Laundry Kiloan' ? _rupiah(subtotal) : 'Menunggu Review Admin',
+        subtotal: _selectedService == 'Laundry Kiloan'
+            ? _rupiah(subtotal)
+            : _isSatuan
+                ? 'Mulai ${_rupiah(subtotal)}'
+                : 'Menunggu Review Admin',
       ),
     );
   }
 
   // --- Helper Widgets ---
+
+  /// Input alamat yang terisi otomatis dari alamat utama di profil,
+  /// tapi tetap bisa diubah khusus untuk pesanan ini.
+  Widget _buildAddressInput(TextEditingController controller) {
+    final alamatUtama = UserProfileStore.instance.address;
+    final isChanged = controller.text.trim() != alamatUtama;
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Container(
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(10),
+            border: Border.all(color: const Color(0xFF338CA8)),
+          ),
+          child: TextField(
+            controller: controller,
+            minLines: 1,
+            maxLines: 3,
+            onChanged: (_) => setState(() {}),
+            style: GoogleFonts.poppins(fontSize: 12.5),
+            decoration: const InputDecoration(
+              hintText: 'Masukkan alamat lengkap & patokan rumah...',
+              prefixIcon: Icon(
+                Icons.home_work_outlined,
+                color: Color(0xFF338CA8),
+                size: 20,
+              ),
+              border: InputBorder.none,
+              contentPadding:
+                  EdgeInsets.symmetric(vertical: 12, horizontal: 10),
+            ),
+          ),
+        ),
+        const SizedBox(height: 6),
+        if (isChanged)
+          GestureDetector(
+            onTap: () => setState(() => controller.text = alamatUtama),
+            child: Text(
+              'Gunakan alamat utama',
+              style: GoogleFonts.poppins(
+                fontSize: 11,
+                fontWeight: FontWeight.w600,
+                color: const Color(0xFF338CA8),
+              ),
+            ),
+          )
+        else
+          Text(
+            'Terisi otomatis dari alamat utama di profil. Bisa diubah untuk pesanan ini.',
+            style: GoogleFonts.poppins(
+              fontSize: 10.5,
+              color: const Color(0xFF64748B),
+            ),
+          ),
+      ],
+    );
+  }
 
   Widget _buildSectionHeader(String title, String subtitle) {
     return Column(

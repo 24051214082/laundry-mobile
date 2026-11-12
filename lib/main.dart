@@ -16,6 +16,7 @@ import 'chat_list_page.dart';
 import 'profile_page.dart';
 import 'admin_home_page.dart';
 import 'rekapitulasi_transaksi.dart';
+import 'admin_profile_page.dart';
 
 void main() {
   WidgetsFlutterBinding.ensureInitialized();
@@ -59,6 +60,7 @@ class MyApp extends StatelessWidget {
         '/profile': (context) => const ProfilePage(),
         '/admin-home': (context) => const AdminHomePage(),
         '/rekapitulasi-transaksi': (context) => const RekapitulasiTransaksiPage(),
+        '/admin-profile': (context) => const AdminProfilePage(),
       },
     );
   }

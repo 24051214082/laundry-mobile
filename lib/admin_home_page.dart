@@ -1,528 +1,452 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 
-class AdminHomePage extends StatefulWidget {
+import 'admin_bottom_nav.dart'; // sesuaikan path folder
+
+class AdminHomePage extends StatelessWidget {
   const AdminHomePage({super.key});
 
-  @override
-  State<AdminHomePage> createState() => _AdminHomePageState();
-}
-
-class _AdminHomePageState extends State<AdminHomePage> {
-  int _currentIndex = 0;
+  static const Color _navy = Color(0xFF1B4E6C);
+  static const Color _bg = Color(0xFFD8F1FD);
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFFD8F1FD),
+      backgroundColor: _bg,
       body: SafeArea(
         child: SingleChildScrollView(
+          padding: const EdgeInsets.fromLTRB(20, 16, 20, 24),
           child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              // Header Admin & Notifikasi
-              Padding(
-                padding: const EdgeInsets.fromLTRB(20, 16, 20, 16),
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          'Halo,',
-                          style: GoogleFonts.poppins(
-                            fontSize: 14,
-                            fontWeight: FontWeight.w400,
-                            color: const Color(0xFF2C6B8E),
-                          ),
-                        ),
-                        Text(
-                          'Admin Nency',
-                          style: GoogleFonts.poppins(
-                            fontSize: 24,
-                            fontWeight: FontWeight.w800,
-                            color: const Color(0xFF1B4E6C),
-                          ),
-                        ),
-                        Text(
-                          'Kelola operasional laundry hari ini!',
-                          style: GoogleFonts.poppins(
-                            fontSize: 12,
-                            color: const Color(0xFF326D8C),
-                          ),
-                        ),
-                      ],
-                    ),
-                    Row(
-                      children: [
-                        // Tombol Notifikasi
-                        Stack(
-                          clipBehavior: Clip.none,
-                          children: [
-                            Container(
-                              padding: const EdgeInsets.all(10),
-                              decoration: const BoxDecoration(
-                                color: Colors.white,
-                                shape: BoxShape.circle,
-                              ),
-                              child: const Icon(
-                                Icons.notifications_none_rounded,
-                                color: Color(0xFF2C6B8E),
-                                size: 24,
-                              ),
-                            ),
-                            Positioned(
-                              top: 2,
-                              right: 2,
-                              child: Container(
-                                width: 10,
-                                height: 10,
-                                decoration: const BoxDecoration(
-                                  color: Color(0xFFEF4444),
-                                  shape: BoxShape.circle,
-                                ),
-                              ),
-                            ),
-                          ],
-                        ),
-                        const SizedBox(width: 10),
-                        // Avatar Profil
-                        Container(
-                          width: 42,
-                          height: 42,
-                          decoration: const BoxDecoration(
-                            color: Color(0xFF3B82F6),
-                            shape: BoxShape.circle,
-                          ),
-                          child: const Icon(
-                            Icons.person,
-                            color: Colors.white,
-                            size: 26,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ],
-                ),
-              ),
-
-              // Card Ringkasan Pesanan
-              Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 20),
-                child: Container(
-                  padding: const EdgeInsets.all(16),
-                  decoration: BoxDecoration(
-                    color: Colors.white,
-                    borderRadius: BorderRadius.circular(20),
-                    boxShadow: [
-                      BoxShadow(
-                        color: const Color(0xFF1B4E6C).withOpacity(0.06),
-                        blurRadius: 12,
-                        offset: const Offset(0, 4),
-                      ),
-                    ],
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  _buildHeader(context),
+                  const SizedBox(height: 20),
+                  _buildSummaryCard(),
+                  const SizedBox(height: 24),
+                  _sectionTitle('Menu Utama'),
+                  const SizedBox(height: 12),
+                  _buildMenuGrid(context),
+                  const SizedBox(height: 24),
+                  _buildRecentOrdersHeader(),
+                  const SizedBox(height: 12),
+                  _buildOrderItem(
+                    code: 'L0042',
+                    name: 'Nancy',
+                    service: 'Laundry Kiloan • 5 kg',
+                    status: 'Menunggu Timbangan',
+                    statusColor: const Color(0xFF0284C7),
+                    statusBg: const Color(0xFFE0F2FE),
                   ),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        'Ringkasan Pesanan',
-                        style: GoogleFonts.poppins(
-                          fontSize: 17,
-                          fontWeight: FontWeight.w700,
-                          color: const Color(0xFF1B4E6C),
-                        ),
-                      ),
-                      const SizedBox(height: 12),
-                      Row(
-                        children: [
-                          Expanded(
-                            child: _buildSummaryItem(
-                              title: 'Menunggu',
-                              count: '12',
-                              icon: Icons.hourglass_top_rounded,
-                            ),
-                          ),
-                          Container(
-                            height: 40,
-                            width: 1,
-                            color: Colors.grey.withOpacity(0.3),
-                          ),
-                          Expanded(
-                            child: _buildSummaryItem(
-                              title: 'Diproses',
-                              count: '8',
-                              icon: Icons.local_laundry_service_rounded,
-                            ),
-                          ),
-                          Container(
-                            height: 40,
-                            width: 1,
-                            color: Colors.grey.withOpacity(0.3),
-                          ),
-                          Expanded(
-                            child: _buildSummaryItem(
-                              title: 'Selesai',
-                              count: '15',
-                              icon: Icons.check_circle_rounded,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ],
+                  _buildOrderItem(
+                    code: 'L0041',
+                    name: 'Budi',
+                    service: 'Cuci Setrika • 3 kg',
+                    status: 'Diproses',
+                    statusColor: const Color(0xFFD97706),
+                    statusBg: const Color(0xFFFEF3C7),
                   ),
-                ),
-              ),
-
-              const SizedBox(height: 16),
-
-              // Menu Fitur (2x2 Grid)
-              Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 20),
-                child: GridView.count(
-                  crossAxisCount: 2,
-                  shrinkWrap: true,
-                  physics: const NeverScrollableScrollPhysics(),
-                  crossAxisSpacing: 14,
-                  mainAxisSpacing: 14,
-                  childAspectRatio: 0.88,
-                  children: [
-                    _buildAdminMenuCard(
-                      title: 'Manajeme Pesanan',
-                      subtitle: 'Konfirmasi & update status',
-                      iconData: Icons.local_laundry_service_outlined,
-                      onTap: () {
-                        // TODO: Navigasi Manajemen Pesanan
-                      },
-                    ),
-                    _buildAdminMenuCard(
-                      title: 'Rekap Transaksi',
-                      subtitle: 'Pantau pendapatan harian',
-                      iconData: Icons.bar_chart_rounded,
-                      onTap: () {
-                        Navigator.pushNamed(context, '/rekapitulasi-transaksi');
-                      },
-                    ),
-                    _buildAdminMenuCard(
-                      title: 'Data Customer',
-                      subtitle: 'Informasi kontak pelanggan',
-                      iconData: Icons.people_alt_rounded,
-                      onTap: () {
-                        Navigator.pushNamed(context, '/customer-data');
-                      },
-                    ),
-                    _buildAdminMenuCard(
-                      title: 'Kelola Layanan',
-                      subtitle: 'Atur tarif & paket laundry',
-                      iconData: Icons.dry_cleaning_rounded,
-                      onTap: () {
-                        Navigator.pushNamed(context, '/manage-services');
-                      },
-                    ),
-                  ],
-                ),
-              ),
-
-              const SizedBox(height: 20),
-
-              // Section Pesanan Masuk Terbaru
-              Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 20),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      'Pesanan Masuk Terbaru',
-                      style: GoogleFonts.poppins(
-                        fontSize: 15,
-                        fontWeight: FontWeight.w700,
-                        color: const Color(0xFF1B4E6C),
-                      ),
-                    ),
-                    const SizedBox(height: 8),
-                    Container(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 14,
-                        vertical: 12,
-                      ),
-                      decoration: BoxDecoration(
-                        color: Colors.white,
-                        borderRadius: BorderRadius.circular(16),
-                      ),
-                      child: Row(
-                        children: [
-                          Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(
-                                'No. L0042',
-                                style: GoogleFonts.poppins(
-                                  fontSize: 10,
-                                  color: const Color(0xFF64748B),
-                                ),
-                              ),
-                              Text(
-                                'Nancy',
-                                style: GoogleFonts.poppins(
-                                  fontSize: 13,
-                                  fontWeight: FontWeight.w700,
-                                  color: const Color(0xFF1B4E6C),
-                                ),
-                              ),
-                            ],
-                          ),
-                          const SizedBox(width: 16),
-                          Expanded(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text(
-                                  'Layanan',
-                                  style: GoogleFonts.poppins(
-                                    fontSize: 10,
-                                    color: const Color(0xFF64748B),
-                                  ),
-                                ),
-                                Text(
-                                  'Lundry Kiloan 5 kg',
-                                  style: GoogleFonts.poppins(
-                                    fontSize: 11,
-                                    fontWeight: FontWeight.w500,
-                                    color: const Color(0xFF334155),
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
-                          Container(
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 10,
-                              vertical: 5,
-                            ),
-                            decoration: BoxDecoration(
-                              color: const Color(0xFFE0F2FE),
-                              borderRadius: BorderRadius.circular(12),
-                            ),
-                            child: Text(
-                              'Menunggu Timbangan',
-                              style: GoogleFonts.poppins(
-                                fontSize: 9.5,
-                                fontWeight: FontWeight.w600,
-                                color: const Color(0xFF0284C7),
-                              ),
-                            ),
-                          ),
-                          const SizedBox(width: 6),
-                          Container(
-                            padding: const EdgeInsets.all(4),
-                            decoration: const BoxDecoration(
-                              color: Color(0xFF60A5FA),
-                              shape: BoxShape.circle,
-                            ),
-                            child: const Icon(
-                              Icons.arrow_forward_ios_rounded,
-                              size: 10,
-                              color: Colors.white,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              const SizedBox(height: 24),
+                  _buildOrderItem(
+                    code: 'L0040',
+                    name: 'Sinta',
+                    service: 'Dry Cleaning • 2 pcs',
+                    status: 'Selesai',
+                    statusColor: const Color(0xFF16A34A),
+                    statusBg: const Color(0xFFDCFCE7),
+                  ),
             ],
           ),
         ),
       ),
-      // Bottom Navigation Bar Custom
-      bottomNavigationBar: Container(
-        height: 65,
-        decoration: const BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
-        ),
-        child: Row(
-          mainAxisAlignment: MainAxisAlignment.spaceAround,
-          children: [
-            _buildNavItem(0, Icons.home_rounded, 'Beranda'),
-            _buildNavItem(1, Icons.assignment_outlined, 'Pesanan'),
-            _buildNavItem(2, Icons.bar_chart_rounded, 'Laporan'),
-            _buildNavItem(3, Icons.person_outline_rounded, 'Profil'),
-          ],
-        ),
-      ),
+      bottomNavigationBar: const AdminBottomNav(currentIndex: 0),
     );
   }
 
-  Widget _buildSummaryItem({
-    required String title,
-    required String count,
-    required IconData icon,
-  }) {
-    return Column(
+  // ---------------------------------------------------------------- HEADER
+  Widget _buildHeader(BuildContext context) {
+    return Row(
       children: [
-        Text(
-          title,
-          style: GoogleFonts.poppins(
-            fontSize: 12,
-            color: const Color(0xFF475569),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'Halo,',
+                style: GoogleFonts.poppins(
+                  fontSize: 14,
+                  color: const Color(0xFF2C6B8E),
+                ),
+              ),
+              Text(
+                'Admin Nency',
+                style: GoogleFonts.poppins(
+                  fontSize: 24,
+                  fontWeight: FontWeight.w800,
+                  color: _navy,
+                  height: 1.2,
+                ),
+              ),
+              const SizedBox(height: 2),
+              Text(
+                'Kelola operasional laundry hari ini!',
+                style: GoogleFonts.poppins(
+                  fontSize: 12,
+                  color: const Color(0xFF326D8C),
+                ),
+              ),
+            ],
           ),
         ),
-        const SizedBox(height: 2),
-        Row(
-          mainAxisAlignment: MainAxisAlignment.center,
+        Stack(
+          clipBehavior: Clip.none,
           children: [
-            Text(
-              count,
-              style: GoogleFonts.poppins(
-                fontSize: 26,
-                fontWeight: FontWeight.w800,
-                color: const Color(0xFF1B4E6C),
+            Container(
+              padding: const EdgeInsets.all(10),
+              decoration: const BoxDecoration(
+                color: Colors.white,
+                shape: BoxShape.circle,
+              ),
+              child: const Icon(
+                Icons.notifications_none_rounded,
+                color: Color(0xFF2C6B8E),
+                size: 24,
               ),
             ),
-            const SizedBox(width: 6),
-            Icon(icon, size: 20, color: const Color(0xFF64748B)),
+            Positioned(
+              top: 2,
+              right: 2,
+              child: Container(
+                width: 10,
+                height: 10,
+                decoration: BoxDecoration(
+                  color: const Color(0xFFEF4444),
+                  shape: BoxShape.circle,
+                  border: Border.all(color: Colors.white, width: 1.5),
+                ),
+              ),
+            ),
           ],
+        ),
+        const SizedBox(width: 10),
+        GestureDetector(
+          onTap: () => Navigator.pushReplacementNamed(context, '/admin-profile'),
+          child: Container(
+            width: 44,
+            height: 44,
+            decoration: const BoxDecoration(
+              color: Color(0xFF3B82F6),
+              shape: BoxShape.circle,
+            ),
+            child: const Icon(Icons.person, color: Colors.white, size: 26),
+          ),
         ),
       ],
     );
   }
 
-  Widget _buildAdminMenuCard({
+  // ------------------------------------------------------- SUMMARY CARD
+  Widget _buildSummaryCard() {
+    return Container(
+      padding: const EdgeInsets.all(18),
+      decoration: _cardDecoration(radius: 20),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'Ringkasan Pesanan',
+            style: GoogleFonts.poppins(
+              fontSize: 16,
+              fontWeight: FontWeight.w700,
+              color: _navy,
+            ),
+          ),
+          const SizedBox(height: 14),
+          Row(
+            children: [
+              _summaryItem('Menunggu', '12', Icons.hourglass_top_rounded,
+                  const Color(0xFF0284C7), const Color(0xFFE0F2FE)),
+              _divider(),
+              _summaryItem('Diproses', '8', Icons.local_laundry_service_rounded,
+                  const Color(0xFFD97706), const Color(0xFFFEF3C7)),
+              _divider(),
+              _summaryItem('Selesai', '15', Icons.check_circle_rounded,
+                  const Color(0xFF16A34A), const Color(0xFFDCFCE7)),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _divider() => Container(
+        height: 56,
+        width: 1,
+        color: const Color(0xFFE2E8F0),
+      );
+
+  Widget _summaryItem(
+    String title,
+    String count,
+    IconData icon,
+    Color color,
+    Color bg,
+  ) {
+    return Expanded(
+      child: Column(
+        children: [
+          Container(
+            padding: const EdgeInsets.all(8),
+            decoration: BoxDecoration(color: bg, shape: BoxShape.circle),
+            child: Icon(icon, size: 18, color: color),
+          ),
+          const SizedBox(height: 6),
+          Text(
+            count,
+            style: GoogleFonts.poppins(
+              fontSize: 24,
+              fontWeight: FontWeight.w800,
+              color: _navy,
+              height: 1.1,
+            ),
+          ),
+          Text(
+            title,
+            style: GoogleFonts.poppins(
+              fontSize: 11.5,
+              color: const Color(0xFF475569),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // ------------------------------------------------------------ MENU GRID
+  Widget _buildMenuGrid(BuildContext context) {
+    return GridView(
+      shrinkWrap: true,
+      physics: const NeverScrollableScrollPhysics(),
+      gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+        crossAxisCount: 2,
+        crossAxisSpacing: 12,
+        mainAxisSpacing: 12,
+        mainAxisExtent: 128, // tinggi tetap, tidak ikut lebar layar
+      ),
+      children: [
+        _menuCard(
+          title: 'Manajemen Pesanan',
+          subtitle: 'Konfirmasi & update status',
+          icon: Icons.local_laundry_service_outlined,
+          color: const Color(0xFF3B82F6),
+          onTap: () {
+            // TODO: Navigasi Manajemen Pesanan
+          },
+        ),
+        _menuCard(
+          title: 'Rekap Transaksi',
+          subtitle: 'Pantau pendapatan harian',
+          icon: Icons.bar_chart_rounded,
+          color: const Color(0xFF16A34A),
+          onTap: () => Navigator.pushNamed(context, '/rekapitulasi-transaksi'),
+        ),
+        _menuCard(
+          title: 'Data Customer',
+          subtitle: 'Informasi kontak pelanggan',
+          icon: Icons.people_alt_rounded,
+          color: const Color(0xFF8B5CF6),
+          onTap: () => Navigator.pushNamed(context, '/customer-data'),
+        ),
+        _menuCard(
+          title: 'Kelola Layanan',
+          subtitle: 'Atur tarif & paket laundry',
+          icon: Icons.dry_cleaning_rounded,
+          color: const Color(0xFFF59E0B),
+          onTap: () => Navigator.pushNamed(context, '/manage-services'),
+        ),
+      ],
+    );
+  }
+
+  Widget _menuCard({
     required String title,
     required String subtitle,
-    required IconData iconData,
+    required IconData icon,
+    required Color color,
     required VoidCallback onTap,
   }) {
-    return GestureDetector(
-      onTap: onTap,
-      child: Container(
-        decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(18),
-          boxShadow: [
-            BoxShadow(
-              color: const Color(0xFF1B4E6C).withOpacity(0.04),
-              blurRadius: 8,
-              offset: const Offset(0, 3),
-            ),
-          ],
-        ),
-        clipBehavior: Clip.antiAlias,
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            // Bagian Atas: Latar Belakang Biru Penuh dengan Ikon Besar
-            Expanded(
-              child: Container(
-                width: double.infinity,
-                decoration: const BoxDecoration(
-                  color: Color(0xFF5B9EE1),
+    return Material(
+      color: Colors.white,
+      borderRadius: BorderRadius.circular(18),
+      elevation: 0,
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(18),
+        child: Container(
+          padding: const EdgeInsets.all(14),
+          decoration: _cardDecoration(radius: 18),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Container(
+                padding: const EdgeInsets.all(10),
+                decoration: BoxDecoration(
+                  color: color.withOpacity(0.12),
+                  borderRadius: BorderRadius.circular(12),
                 ),
-                child: Center(
-                  child: Icon(
-                    iconData,
-                    size: 48,
-                    color: Colors.white,
-                  ),
+                child: Icon(icon, color: color, size: 24),
+              ),
+              const Spacer(),
+              Text(
+                title,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: GoogleFonts.poppins(
+                  fontSize: 13,
+                  fontWeight: FontWeight.w700,
+                  color: _navy,
                 ),
               ),
-            ),
-            // Bagian Bawah: Teks Judul, Subtitle & Tombol Panah
-            Padding(
-              padding: const EdgeInsets.all(12),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
+              const SizedBox(height: 2),
+              Row(
                 children: [
-                  Text(
-                    title,
-                    style: GoogleFonts.poppins(
-                      fontSize: 12.5,
-                      fontWeight: FontWeight.w700,
-                      color: const Color(0xFF1B4E6C),
+                  Expanded(
+                    child: Text(
+                      subtitle,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: GoogleFonts.poppins(
+                        fontSize: 10,
+                        color: const Color(0xFF64748B),
+                      ),
                     ),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
                   ),
-                  const SizedBox(height: 2),
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      Expanded(
-                        child: Text(
-                          subtitle,
-                          style: GoogleFonts.poppins(
-                            fontSize: 9.5,
-                            color: const Color(0xFF64748B),
-                          ),
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                      ),
-                      Container(
-                        padding: const EdgeInsets.all(4),
-                        decoration: const BoxDecoration(
-                          color: Color(0xFF5B9EE1),
-                          shape: BoxShape.circle,
-                        ),
-                        child: const Icon(
-                          Icons.arrow_forward_ios_rounded,
-                          size: 9,
-                          color: Colors.white,
-                        ),
-                      ),
-                    ],
-                  ),
+                  Icon(Icons.arrow_forward_ios_rounded,
+                      size: 11, color: color),
                 ],
               ),
-            ),
-          ],
+            ],
+          ),
         ),
       ),
     );
   }
 
-  Widget _buildNavItem(int index, IconData icon, String label) {
-    final isSelected = _currentIndex == index;
-    return GestureDetector(
-      onTap: () {
-        setState(() {
-          _currentIndex = index;
-        });
-
-        // Navigasi footer dari AdminHomePage
-        if (index == 0) {
-          // Sedang di Beranda Admin
-        } else if (index == 1) {
-          // TODO: Arahkan ke halaman Pesanan
-        } else if (index == 2) {
-          // Ikon Laporan diklik -> Buka Rekapitulasi Transaksi
-          Navigator.pushNamed(context, '/rekapitulasi-transaksi');
-        } else if (index == 3) {
-          // TODO: Arahkan ke halaman Profil
-        }
-      },
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Icon(
-            icon,
-            color: isSelected ? const Color(0xFF0284C7) : const Color(0xFF94A3B8),
-            size: 24,
-          ),
-          Text(
-            label,
+  // ------------------------------------------------------- RECENT ORDERS
+  Widget _buildRecentOrdersHeader() {
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+      children: [
+        _sectionTitle('Pesanan Masuk Terbaru'),
+        GestureDetector(
+          onTap: () {
+            // TODO: Navigasi ke daftar pesanan
+          },
+          child: Text(
+            'Lihat Semua',
             style: GoogleFonts.poppins(
-              fontSize: 10,
-              fontWeight: isSelected ? FontWeight.w600 : FontWeight.w400,
-              color: isSelected ? const Color(0xFF0284C7) : const Color(0xFF94A3B8),
+              fontSize: 12,
+              fontWeight: FontWeight.w600,
+              color: const Color(0xFF0284C7),
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildOrderItem({
+    required String code,
+    required String name,
+    required String service,
+    required String status,
+    required Color statusColor,
+    required Color statusBg,
+  }) {
+    return Container(
+      margin: const EdgeInsets.only(bottom: 10),
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+      decoration: _cardDecoration(radius: 16),
+      child: Row(
+        children: [
+          Container(
+            padding: const EdgeInsets.all(10),
+            decoration: BoxDecoration(
+              color: const Color(0xFFE0F2FE),
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: const Icon(Icons.local_laundry_service_rounded,
+                size: 20, color: Color(0xFF0284C7)),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  '$name • #$code',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: GoogleFonts.poppins(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w700,
+                    color: _navy,
+                  ),
+                ),
+                Text(
+                  service,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: GoogleFonts.poppins(
+                    fontSize: 11,
+                    color: const Color(0xFF64748B),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(width: 8),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+            decoration: BoxDecoration(
+              color: statusBg,
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: Text(
+              status,
+              style: GoogleFonts.poppins(
+                fontSize: 9.5,
+                fontWeight: FontWeight.w600,
+                color: statusColor,
+              ),
             ),
           ),
         ],
       ),
+    );
+  }
+
+  // -------------------------------------------------------------- HELPERS
+  Widget _sectionTitle(String text) {
+    return Text(
+      text,
+      style: GoogleFonts.poppins(
+        fontSize: 15,
+        fontWeight: FontWeight.w700,
+        color: _navy,
+      ),
+    );
+  }
+
+  BoxDecoration _cardDecoration({required double radius}) {
+    return BoxDecoration(
+      color: Colors.white,
+      borderRadius: BorderRadius.circular(radius),
+      boxShadow: [
+        BoxShadow(
+          color: _navy.withOpacity(0.06),
+          blurRadius: 12,
+          offset: const Offset(0, 4),
+        ),
+      ],
     );
   }
 }

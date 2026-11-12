@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'app_bottom_nav.dart';
 import 'status_pesanan.dart';
+import 'user_profile_store.dart';
 
 class HomePage extends StatefulWidget {
   const HomePage({super.key});
@@ -76,13 +77,16 @@ class _HomePageState extends State<HomePage> {
                         ),
                         Row(
                           children: [
-                            Text(
-                              'Zea',
-                              style: GoogleFonts.poppins(
-                                fontSize: 28,
-                                fontWeight: FontWeight.w800,
-                                color: const Color(0xFF1B4E6C),
-                                letterSpacing: -0.5,
+                           ListenableBuilder(
+                              listenable: UserProfileStore.instance,
+                              builder: (context, _) => Text(
+                                UserProfileStore.instance.name.split(' ').first,
+                                style: GoogleFonts.poppins(
+                                  fontSize: 28,
+                                  fontWeight: FontWeight.w800,
+                                  color: const Color(0xFF1B4E6C),
+                                  letterSpacing: -0.5,
+                                ),
                               ),
                             ),
                             const SizedBox(width: 8),
