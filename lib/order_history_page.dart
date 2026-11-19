@@ -4,6 +4,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import 'app_bottom_nav.dart';
 import 'order_confirmation_page.dart';
 import 'order_detail_page.dart';
+import 'payment_page.dart';
 import 'user_session.dart';
 
 class _AppColors {
@@ -27,6 +28,7 @@ class OrderItem {
   final String quantity;
   final String total;
   final String rawStatus;
+  final String paymentStatus;
   final OrderStatus status;
   final OrderSummary? summary;
 
@@ -37,9 +39,12 @@ class OrderItem {
     required this.quantity,
     required this.total,
     required this.rawStatus,
+    required this.paymentStatus,
     required this.status,
     this.summary,
   });
+
+  bool get isPaid => paymentStatus.trim().toLowerCase() == 'lunas';
 
   factory OrderItem.fromMap(Map<String, dynamic> map) {
     final String orderCode = (map['order_code'] ?? '-').toString();
@@ -47,16 +52,18 @@ class OrderItem {
     final String speed = (map['speed'] ?? 'Reguler').toString();
     final String treatment = (map['treatment'] ?? 'Cuci Saja').toString();
     final String detergent =
-        (map['detergent_name'] ?? 'Standar / Bawa Sendiri').toString();
+    (map['detergent_name'] ?? 'Standar / Bawa Sendiri').toString();
     final String perfume =
-        (map['perfume_name'] ?? 'Standar / Bawa Sendiri').toString();
+    (map['perfume_name'] ?? 'Standar / Bawa Sendiri').toString();
     final String pickup = (map['pickup_method'] ?? 'Antar Sendiri').toString();
     final String delivery =
-        (map['delivery_method'] ?? 'Ambil Sendiri').toString();
+    (map['delivery_method'] ?? 'Ambil Sendiri').toString();
     final String schedule = (map['pickup_schedule'] ?? '-').toString();
     final String address = (map['address'] ?? '-').toString();
     final String weightOrQty = (map['weight_or_qty'] ?? '-').toString();
     final String rawStatus = (map['status'] ?? 'Penjemputan').toString();
+    final String paymentStatus =
+    (map['payment_status'] ?? 'Belum Lunas').toString();
 
     final int totalInt = (map['total_price'] is num)
         ? (map['total_price'] as num).toInt()
@@ -96,6 +103,7 @@ class OrderItem {
       quantity: weightOrQty,
       total: formattedTotal,
       rawStatus: rawStatus,
+      paymentStatus: paymentStatus,
       status: mappedStatus,
       summary: OrderSummary(
         jenisLaundry: serviceName,
@@ -193,6 +201,25 @@ class _OrderHistoryPageState extends State<OrderHistoryPage> {
     }
   }
 
+  Future<void> _openPaymentPage(OrderItem order) async {
+    final result = await Navigator.push<bool>(
+      context,
+      MaterialPageRoute(
+        builder: (_) => PaymentPage(
+          orderId: order.id,
+          serviceName: order.summary?.jenisLaundry ?? order.service,
+          totalAmount: order.total,
+          isPaid: order.isPaid,
+        ),
+      ),
+    );
+
+    if (!mounted) return;
+    if (result == true || !order.isPaid) {
+      await _fetchOrderHistory();
+    }
+  }
+
   List<OrderItem> get _filteredOrders {
     return _orders.where((o) {
       final matchTab = switch (_selectedTab) {
@@ -203,7 +230,7 @@ class _OrderHistoryPageState extends State<OrderHistoryPage> {
         _ => true,
       };
       final matchQuery =
-          o.id.toLowerCase().contains(_query.trim().toLowerCase());
+      o.id.toLowerCase().contains(_query.trim().toLowerCase());
       return matchTab && matchQuery;
     }).toList();
   }
@@ -221,37 +248,40 @@ class _OrderHistoryPageState extends State<OrderHistoryPage> {
           Expanded(
             child: _isLoading
                 ? const Center(
-                    child: CircularProgressIndicator(color: _AppColors.primary),
-                  )
+              child: CircularProgressIndicator(color: _AppColors.primary),
+            )
                 : RefreshIndicator(
-                    onRefresh: _fetchOrderHistory,
-                    color: _AppColors.primary,
-                    child: orders.isEmpty
-                        ? ListView(
-                            children: [
-                              SizedBox(
-                                height:
-                                    MediaQuery.of(context).size.height * 0.45,
-                                child: Center(
-                                  child: Text(
-                                    'Pesanan tidak ditemukan',
-                                    style: GoogleFonts.poppins(
-                                      fontSize: 13,
-                                      color: _AppColors.navy.withOpacity(0.6),
-                                    ),
-                                  ),
-                                ),
-                              ),
-                            ],
-                          )
-                        : ListView.separated(
-                            padding: const EdgeInsets.fromLTRB(16, 16, 16, 24),
-                            itemCount: orders.length,
-                            separatorBuilder: (_, __) =>
-                                const SizedBox(height: 14),
-                            itemBuilder: (_, i) => _OrderCard(order: orders[i]),
-                          ),
+              onRefresh: _fetchOrderHistory,
+              color: _AppColors.primary,
+              child: orders.isEmpty
+                  ? ListView(
+                children: [
+                  SizedBox(
+                    height:
+                    MediaQuery.of(context).size.height * 0.45,
+                    child: Center(
+                      child: Text(
+                        'Pesanan tidak ditemukan',
+                        style: GoogleFonts.poppins(
+                          fontSize: 13,
+                          color: _AppColors.navy.withOpacity(0.6),
+                        ),
+                      ),
+                    ),
                   ),
+                ],
+              )
+                  : ListView.separated(
+                padding: const EdgeInsets.fromLTRB(16, 16, 16, 24),
+                itemCount: orders.length,
+                separatorBuilder: (_, __) =>
+                const SizedBox(height: 14),
+                itemBuilder: (_, i) => _OrderCard(
+                  order: orders[i],
+                  onPayTap: () => _openPaymentPage(orders[i]),
+                ),
+              ),
+            ),
           ),
         ],
       ),
@@ -332,7 +362,7 @@ class _OrderHistoryPageState extends State<OrderHistoryPage> {
                       alignment: Alignment.center,
                       decoration: BoxDecoration(
                         color:
-                            selected ? _AppColors.primary : Colors.transparent,
+                        selected ? _AppColors.primary : Colors.transparent,
                         borderRadius: BorderRadius.circular(12),
                         border: selected
                             ? Border.all(color: Colors.white, width: 1.5)
@@ -361,8 +391,12 @@ class _OrderHistoryPageState extends State<OrderHistoryPage> {
 
 class _OrderCard extends StatelessWidget {
   final OrderItem order;
+  final VoidCallback onPayTap;
 
-  const _OrderCard({required this.order});
+  const _OrderCard({
+    required this.order,
+    required this.onPayTap,
+  });
 
   IconData get _icon {
     switch (order.status) {
@@ -391,6 +425,8 @@ class _OrderCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final canPay = !order.isPaid && order.status != OrderStatus.dibatalkan;
+
     return Container(
       decoration: BoxDecoration(
         color: Colors.white,
@@ -431,12 +467,33 @@ class _OrderCard extends StatelessWidget {
                           color: Colors.grey.shade600,
                         ),
                       ),
+                      const SizedBox(height: 4),
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 8, vertical: 2),
+                        decoration: BoxDecoration(
+                          color: order.isPaid
+                              ? const Color(0xFFDCFCE7)
+                              : const Color(0xFFFEF3C7),
+                          borderRadius: BorderRadius.circular(10),
+                        ),
+                        child: Text(
+                          order.paymentStatus,
+                          style: GoogleFonts.poppins(
+                            fontSize: 9.5,
+                            fontWeight: FontWeight.w600,
+                            color: order.isPaid
+                                ? const Color(0xFF166534)
+                                : const Color(0xFF92400E),
+                          ),
+                        ),
+                      ),
                     ],
                   ),
                 ),
                 Container(
                   padding:
-                      const EdgeInsets.symmetric(horizontal: 14, vertical: 7),
+                  const EdgeInsets.symmetric(horizontal: 14, vertical: 7),
                   decoration: BoxDecoration(
                     color: _chipColor,
                     borderRadius: BorderRadius.circular(20),
@@ -521,36 +578,60 @@ class _OrderCard extends StatelessWidget {
           const Divider(height: 1, thickness: 1, color: _AppColors.divider),
           Padding(
             padding: const EdgeInsets.fromLTRB(16, 10, 16, 12),
-            child: Align(
-              alignment: Alignment.centerRight,
-              child: GestureDetector(
-                onTap: () {
-                  Navigator.pushNamed(
-                    context,
-                    '/order-detail',
-                    arguments: OrderDetailArgs(
-                      id: order.id,
-                      date: order.date,
-                      summary: order.summary,
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.end,
+              children: [
+                if (canPay) ...[
+                  GestureDetector(
+                    onTap: onPayTap,
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 16, vertical: 9),
+                      decoration: BoxDecoration(
+                        color: _AppColors.primary,
+                        borderRadius: BorderRadius.circular(20),
+                      ),
+                      child: Text(
+                        'Bayar Sekarang',
+                        style: GoogleFonts.poppins(
+                          fontSize: 11,
+                          fontWeight: FontWeight.w600,
+                          color: Colors.white,
+                        ),
+                      ),
                     ),
-                  );
-                },
-                child: Container(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 16, vertical: 9),
-                  decoration: BoxDecoration(
-                    color: _AppColors.buttonGrey,
-                    borderRadius: BorderRadius.circular(20),
                   ),
-                  child: Text(
-                    'Detail Pesanan',
-                    style: GoogleFonts.poppins(
-                      fontSize: 11,
-                      color: Colors.black87,
+                  const SizedBox(width: 8),
+                ],
+                GestureDetector(
+                  onTap: () {
+                    Navigator.pushNamed(
+                      context,
+                      '/order-detail',
+                      arguments: OrderDetailArgs(
+                        id: order.id,
+                        date: order.date,
+                        summary: order.summary,
+                      ),
+                    );
+                  },
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 16, vertical: 9),
+                    decoration: BoxDecoration(
+                      color: _AppColors.buttonGrey,
+                      borderRadius: BorderRadius.circular(20),
+                    ),
+                    child: Text(
+                      'Detail Pesanan',
+                      style: GoogleFonts.poppins(
+                        fontSize: 11,
+                        color: Colors.black87,
+                      ),
                     ),
                   ),
                 ),
-              ),
+              ],
             ),
           ),
         ],
