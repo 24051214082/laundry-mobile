@@ -25,7 +25,7 @@ class _BookingPageState extends State<BookingPage> {
     'Jeans': 20000,
     'Jas': 30000,
     'Handuk': 15000,
-    'Set Seprei': 25000,
+    'Set Seprei': 20000,
   };
 
   // Kecepatan Layanan
@@ -98,6 +98,7 @@ class _BookingPageState extends State<BookingPage> {
   bool get _isKirimKurir => _pengiriman == 'Diantar Kurir';
   bool get _isBoneka => _selectedService == 'Boneka';
   bool get _isSatuan => _selectedService == 'Laundry Satuan';
+  bool get _isBedCover => _selectedService == 'Bed Cover';
 
   @override
   Widget build(BuildContext context) {
@@ -159,7 +160,7 @@ class _BookingPageState extends State<BookingPage> {
                           ? Icons.smart_toy_outlined
                           : _isSatuan
                               ? Icons.checkroom_rounded
-                              : _selectedService == 'Bed Cover'
+                              : _isBedCover
                                   ? Icons.bed_rounded
                                   : Icons.scale_rounded,
                       color: Colors.white,
@@ -251,6 +252,85 @@ class _BookingPageState extends State<BookingPage> {
                       },
                     );
                   }).toList(),
+                ),
+              ),
+            ],
+
+            // ================= Info Tarif Bed Cover & Boneka (Read-Only) =================
+            if (_isBedCover || _isBoneka) ...[
+              const SizedBox(height: 18),
+              _buildSectionHeader(
+                _isBedCover
+                    ? 'Informasi Tarif Bed Cover'
+                    : 'Informasi Tarif Boneka',
+                'Daftar referensi harga berdasarkan ukuran (tidak dapat dipilih)',
+              ),
+              const SizedBox(height: 10),
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.all(14),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: const Color(0xFFCBD5E1)),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        Expanded(
+                          child: _buildPriceInfoCard(
+                            'Kecil',
+                            _isBedCover ? 'Rp20.000' : 'Rp15.000',
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: _buildPriceInfoCard(
+                            'Sedang',
+                            _isBedCover ? 'Rp30.000' : 'Rp20.000',
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: _buildPriceInfoCard(
+                            'Besar',
+                            _isBedCover ? 'Rp40.000' : 'Rp30.000',
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 12),
+                    Container(
+                      padding: const EdgeInsets.all(10),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFE0F2FE),
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          const Icon(
+                            Icons.info_outline,
+                            color: Color(0xFF0369A1),
+                            size: 18,
+                          ),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: Text(
+                              'Catatan: Kategori ukuran (Kecil / Sedang / Besar) akan dicek dan ditentukan langsung oleh admin. Total tagihan akan dikonfirmasi segera.',
+                              style: GoogleFonts.poppins(
+                                fontSize: 10.5,
+                                color: const Color(0xFF0C4A6E),
+                                height: 1.4,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
                 ),
               ),
             ],
@@ -852,6 +932,38 @@ class _BookingPageState extends State<BookingPage> {
   }
 
   // --- Helper Widgets ---
+
+  Widget _buildPriceInfoCard(String sizeLabel, String priceText) {
+    return Container(
+      padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 8),
+      decoration: BoxDecoration(
+        color: const Color(0xFFF8FAFC),
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: const Color(0xFFE2E8F0)),
+      ),
+      child: Column(
+        children: [
+          Text(
+            sizeLabel,
+            style: GoogleFonts.poppins(
+              fontSize: 12,
+              fontWeight: FontWeight.w600,
+              color: const Color(0xFF1B4E6C),
+            ),
+          ),
+          const SizedBox(height: 2),
+          Text(
+            priceText,
+            style: GoogleFonts.poppins(
+              fontSize: 11.5,
+              fontWeight: FontWeight.w700,
+              color: const Color(0xFF338CA8),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
 
   Widget _buildAddressInput(TextEditingController controller) {
     final alamatUtama = UserProfileStore.instance.address;
