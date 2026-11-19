@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 import 'order_confirmation_page.dart';
 
 // ---------------------------------------------------------------------------
@@ -12,22 +13,38 @@ class _C {
   static const navy = Color(0xFF1F3A6E);
   static const button = Color(0xFF263F73);
   static const border = Color(0xFFB9D3DF);
+  static const cancelRed = Color(0xFFD63031);
 }
 
 class OrderDetailArgs {
   final String id;
   final String date;
   final OrderSummary? summary;
+  final dynamic rowId;
+  final String? rawStatus;
+  final bool isPaid;
+  final bool canCancel;
 
   const OrderDetailArgs({
     required this.id,
     required this.date,
     this.summary,
+    this.rowId,
+    this.rawStatus,
+    this.isPaid = false,
+    this.canCancel = false,
   });
 }
 
-class OrderDetailPage extends StatelessWidget {
+class OrderDetailPage extends StatefulWidget {
   const OrderDetailPage({super.key});
+
+  @override
+  State<OrderDetailPage> createState() => _OrderDetailPageState();
+}
+
+class _OrderDetailPageState extends State<OrderDetailPage> {
+  bool _isCancelling = false;
 
   // Data default jika dibuka tanpa argumen
   static const OrderSummary _dummySummary = OrderSummary(
@@ -48,22 +65,181 @@ class OrderDetailPage extends StatelessWidget {
     subtotal: 'Rp35.000',
   );
 
+  bool _canCancelOrder(OrderDetailArgs? args) {
+    if (args == null) return false;
+    if (args.isPaid || !args.canCancel) return false;
+
+    final statusLower = (args.rawStatus ?? '').toLowerCase();
+    if (statusLower.contains('batal') || statusLower == 'selesai') {
+      return false;
+    }
+    return true;
+  }
+
+  Future<void> _handleCancelOrder(
+      BuildContext context,
+      OrderDetailArgs args,
+      ) async {
+    if (_isCancelling || !_canCancelOrder(args)) return;
+
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+        title: Text(
+          'Batalkan Pesanan?',
+          style: GoogleFonts.poppins(
+            fontSize: 15,
+            fontWeight: FontWeight.w700,
+            color: _C.navy,
+          ),
+        ),
+        content: Text(
+          'Yakin ingin membatalkan pesanan ${args.id}? Status pesanan akan berubah menjadi Dibatalkan.',
+          style: GoogleFonts.poppins(
+            fontSize: 12,
+            color: _C.navy,
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: Text(
+              'Kembali',
+              style: GoogleFonts.poppins(
+                fontSize: 12,
+                color: Colors.grey.shade600,
+              ),
+            ),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: _C.cancelRed,
+              elevation: 0,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(8),
+              ),
+            ),
+            child: Text(
+              'Ya, Batalkan',
+              style: GoogleFonts.poppins(
+                fontSize: 12,
+                fontWeight: FontWeight.w600,
+                color: Colors.white,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed != true || !mounted) return;
+
+    setState(() => _isCancelling = true);
+
+    try {
+      final client = Supabase.instance.client;
+
+      final row = args.rowId != null
+          ? await client
+          .from('orders')
+          .select('payment_status, status')
+          .eq('id', args.rowId)
+          .maybeSingle()
+          : await client
+          .from('orders')
+          .select('payment_status, status')
+          .eq('order_code', args.id)
+          .maybeSingle();
+
+      final paymentStatus =
+      (row?['payment_status'] ?? '').toString().trim().toLowerCase();
+      final dbStatus = (row?['status'] ?? '').toString().trim().toLowerCase();
+
+      if (paymentStatus == 'lunas' ||
+          dbStatus.contains('batal') ||
+          dbStatus == 'selesai') {
+        if (!mounted) return;
+        setState(() => _isCancelling = false);
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            backgroundColor: Colors.redAccent,
+            content: Text(
+              paymentStatus == 'lunas'
+                  ? 'Pesanan yang sudah dibayar tidak dapat dibatalkan.'
+                  : 'Pesanan tidak dapat dibatalkan.',
+              style: GoogleFonts.poppins(fontSize: 12),
+            ),
+          ),
+        );
+        return;
+      }
+
+      if (args.rowId != null) {
+        await client
+            .from('orders')
+            .update({'status': 'Dibatalkan'})
+            .eq('id', args.rowId)
+            .neq('payment_status', 'Lunas');
+      } else {
+        await client
+            .from('orders')
+            .update({'status': 'Dibatalkan'})
+            .eq('order_code', args.id)
+            .neq('payment_status', 'Lunas');
+      }
+
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            'Pesanan ${args.id} berhasil dibatalkan.',
+            style: GoogleFonts.poppins(fontSize: 12),
+          ),
+        ),
+      );
+      Navigator.pop(context, true);
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _isCancelling = false);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          backgroundColor: Colors.redAccent,
+          content: Text(
+            'Gagal membatalkan pesanan: $e',
+            style: GoogleFonts.poppins(fontSize: 12),
+          ),
+        ),
+      );
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final raw = ModalRoute.of(context)?.settings.arguments;
 
     String orderId = '#LKN4wa123';
     String orderDate = '18 April 2027 08.00';
+    String badgeStatus = 'Diproses';
     OrderSummary s = _dummySummary;
+    OrderDetailArgs? detailArgs;
 
     // Menangani argumen dari HomePage (Map) maupun dari OrderHistory (OrderDetailArgs)
     if (raw is OrderDetailArgs) {
+      detailArgs = raw;
       orderId = raw.id;
       orderDate = raw.date;
       s = raw.summary ?? _dummySummary;
+      if (raw.rawStatus != null && raw.rawStatus!.trim().isNotEmpty) {
+        badgeStatus = raw.rawStatus!;
+      }
     } else if (raw is Map<String, dynamic>) {
       orderId = raw['orderId']?.toString() ?? orderId;
       orderDate = raw['estimate']?.toString() ?? orderDate;
+      if (raw['status'] != null && raw['status'].toString().trim().isNotEmpty) {
+        badgeStatus = raw['status'].toString();
+      }
       s = OrderSummary(
         jenisLaundry: raw['serviceName']?.toString() ?? 'Kiloan',
         kecepatan: raw['treatment']?.toString() ?? 'Reguler',
@@ -72,7 +248,8 @@ class OrderDetailPage extends StatelessWidget {
         pewangi: raw['perfume']?.toString() ?? 'Ocean Fresh',
         metode: raw['method']?.toString() ?? 'Antar Jemput Driver',
         jadwal: raw['estimate']?.toString() ?? orderDate,
-        alamat: raw['address']?.toString() ?? 'Jl. Ketintang Baru No. 12, Surabaya',
+        alamat:
+        raw['address']?.toString() ?? 'Jl. Ketintang Baru No. 12, Surabaya',
         biaya: [
           CostItem(
             'Layanan & Berat (${raw['weight'] ?? '5.0 kg'})',
@@ -83,6 +260,9 @@ class OrderDetailPage extends StatelessWidget {
       );
     }
 
+    final bool isCancelled = badgeStatus.toLowerCase().contains('batal');
+    final bool showCancelButton = _canCancelOrder(detailArgs);
+
     return Scaffold(
       backgroundColor: Colors.white,
       body: Column(
@@ -90,7 +270,7 @@ class OrderDetailPage extends StatelessWidget {
           _buildHeader(context),
           Expanded(
             child: SingleChildScrollView(
-              padding: const EdgeInsets.fromLTRB(24, 16, 24, 16),
+              padding: const EdgeInsets.fromLTRB(24, 16, 24, 24),
               physics: const BouncingScrollPhysics(),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -124,15 +304,19 @@ class OrderDetailPage extends StatelessWidget {
                           vertical: 4,
                         ),
                         decoration: BoxDecoration(
-                          color: const Color(0xFFE9D5FF),
+                          color: isCancelled
+                              ? const Color(0xFFFEE2E2)
+                              : const Color(0xFFE9D5FF),
                           borderRadius: BorderRadius.circular(8),
                         ),
                         child: Text(
-                          'Diproses',
+                          badgeStatus,
                           style: GoogleFonts.poppins(
                             fontSize: 11,
                             fontWeight: FontWeight.w600,
-                            color: const Color(0xFF7E22CE),
+                            color: isCancelled
+                                ? _C.cancelRed
+                                : const Color(0xFF7E22CE),
                           ),
                         ),
                       ),
@@ -142,11 +326,19 @@ class OrderDetailPage extends StatelessWidget {
                   _buildDetailBox(s),
                   const SizedBox(height: 20),
                   _buildCostSection(s),
+                  const SizedBox(height: 20),
+                  _buildBottomActionButtons(
+                    context,
+                    orderId,
+                    s,
+                    badgeStatus,
+                    showCancelButton,
+                    detailArgs,
+                  ),
                 ],
               ),
             ),
           ),
-          _buildBottomActionButtons(context, orderId, s),
         ],
       ),
     );
@@ -296,86 +488,104 @@ class OrderDetailPage extends StatelessWidget {
     );
   }
 
-  // ---- Tombol Chat Admin & Pesan Lagi -------------------------------------
+  // ---- Tombol Chat Admin, Pesan Lagi & Batalkan Pesanan -----------------
   Widget _buildBottomActionButtons(
       BuildContext context,
       String orderId,
       OrderSummary s,
+      String badgeStatus,
+      bool showCancelButton,
+      OrderDetailArgs? detailArgs,
       ) {
-    return Container(
-      color: Colors.white,
-      padding: EdgeInsets.fromLTRB(
-        20,
-        10,
-        20,
-        MediaQuery.of(context).padding.bottom + 16,
-      ),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          // Tombol Chat Admin (Menuju ke ChatRoomPage)
-          SizedBox(
-            width: double.infinity,
-            height: 44,
-            child: ElevatedButton.icon(
-              onPressed: () {
-                Navigator.pushNamed(
-                  context,
-                  '/chat-room',
-                  arguments: {
-                    'orderId': orderId,
-                    'serviceName': s.jenisLaundry,
-                    'status': 'Diproses',
-                  },
-                );
-              },
-              icon: const Icon(
-                Icons.chat_bubble_outline_rounded,
-                size: 18,
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        SizedBox(
+          width: double.infinity,
+          height: 44,
+          child: ElevatedButton.icon(
+            onPressed: () {
+              Navigator.pushNamed(
+                context,
+                '/chat-room',
+                arguments: {
+                  'orderId': orderId,
+                  'serviceName': s.jenisLaundry,
+                  'status': badgeStatus,
+                },
+              );
+            },
+            icon: const Icon(
+              Icons.chat_bubble_outline_rounded,
+              size: 18,
+              color: Colors.white,
+            ),
+            label: Text(
+              'Tanya Admin Pesanan Ini',
+              style: GoogleFonts.poppins(
+                fontSize: 12.5,
+                fontWeight: FontWeight.w600,
                 color: Colors.white,
               ),
-              label: Text(
-                'Tanya Admin Pesanan Ini',
-                style: GoogleFonts.poppins(
-                  fontSize: 12.5,
-                  fontWeight: FontWeight.w600,
-                  color: Colors.white,
-                ),
-              ),
-              style: ElevatedButton.styleFrom(
-                backgroundColor: _C.button,
-                elevation: 0,
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(8),
-                ),
+            ),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: _C.button,
+              elevation: 0,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(8),
               ),
             ),
           ),
+        ),
+        const SizedBox(height: 8),
+        SizedBox(
+          width: double.infinity,
+          height: 44,
+          child: OutlinedButton(
+            onPressed: () => Navigator.pushNamed(context, '/booking'),
+            style: OutlinedButton.styleFrom(
+              side: const BorderSide(color: _C.button, width: 1.5),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(8),
+              ),
+            ),
+            child: Text(
+              'Pesan Lagi',
+              style: GoogleFonts.poppins(
+                fontSize: 13,
+                fontWeight: FontWeight.w700,
+                color: _C.button,
+              ),
+            ),
+          ),
+        ),
+        if (showCancelButton && detailArgs != null) ...[
           const SizedBox(height: 8),
-          // Tombol Pesan Lagi
           SizedBox(
             width: double.infinity,
             height: 44,
             child: OutlinedButton(
-              onPressed: () => Navigator.pushNamed(context, '/booking'),
+              onPressed: _isCancelling
+                  ? null
+                  : () => _handleCancelOrder(context, detailArgs),
               style: OutlinedButton.styleFrom(
-                side: const BorderSide(color: _C.button, width: 1.5),
+                side: const BorderSide(color: _C.cancelRed, width: 1.5),
                 shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(8),
                 ),
               ),
               child: Text(
-                'Pesan Lagi',
+                _isCancelling ? 'Membatalkan...' : 'Batalkan Pesanan',
                 style: GoogleFonts.poppins(
                   fontSize: 13,
                   fontWeight: FontWeight.w700,
-                  color: _C.button,
+                  color: _C.cancelRed,
                 ),
               ),
             ),
           ),
         ],
-      ),
+      ],
     );
   }
 }

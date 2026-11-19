@@ -22,6 +22,7 @@ class _AppColors {
 enum OrderStatus { dibatalkan, pengantaran, pencucian, selesai }
 
 class OrderItem {
+  final dynamic rowId;
   final String id;
   final String date;
   final String service;
@@ -33,6 +34,7 @@ class OrderItem {
   final OrderSummary? summary;
 
   const OrderItem({
+    required this.rowId,
     required this.id,
     required this.date,
     required this.service,
@@ -46,7 +48,11 @@ class OrderItem {
 
   bool get isPaid => paymentStatus.trim().toLowerCase() == 'lunas';
 
+  bool get canCancel =>
+      !isPaid && status != OrderStatus.dibatalkan && status != OrderStatus.selesai;
+
   factory OrderItem.fromMap(Map<String, dynamic> map) {
+    final dynamic rowId = map['id'];
     final String orderCode = (map['order_code'] ?? '-').toString();
     final String serviceName = (map['service_name'] ?? 'Laundry').toString();
     final String speed = (map['speed'] ?? 'Reguler').toString();
@@ -97,6 +103,7 @@ class OrderItem {
     }
 
     return OrderItem(
+      rowId: rowId,
       id: orderCode,
       date: formattedDate,
       service: '$serviceName - $speed',
@@ -112,8 +119,11 @@ class OrderItem {
         deterjen: detergent,
         pewangi: perfume,
         metode: '$pickup • $delivery',
+        pickupMethod: pickup,
+        deliveryMethod: delivery,
         jadwal: schedule,
         alamat: address,
+        estimatedTotal: totalInt,
         biaya: [
           CostItem('Layanan ($serviceName)', formattedTotal),
           if (weightOrQty != '-') CostItem('Berat / Jumlah', weightOrQty),
@@ -201,6 +211,27 @@ class _OrderHistoryPageState extends State<OrderHistoryPage> {
     }
   }
 
+  Future<void> _openOrderDetailPage(OrderItem order) async {
+    final cancelled = await Navigator.pushNamed(
+      context,
+      '/order-detail',
+      arguments: OrderDetailArgs(
+        id: order.id,
+        date: order.date,
+        summary: order.summary,
+        rowId: order.rowId,
+        rawStatus: order.rawStatus,
+        isPaid: order.isPaid,
+        canCancel: order.canCancel,
+      ),
+    );
+
+    if (!mounted) return;
+    if (cancelled == true) {
+      await _fetchOrderHistory();
+    }
+  }
+
   Future<void> _openPaymentPage(OrderItem order) async {
     final result = await Navigator.push<bool>(
       context,
@@ -279,6 +310,8 @@ class _OrderHistoryPageState extends State<OrderHistoryPage> {
                 itemBuilder: (_, i) => _OrderCard(
                   order: orders[i],
                   onPayTap: () => _openPaymentPage(orders[i]),
+                  onDetailTap: () =>
+                      _openOrderDetailPage(orders[i]),
                 ),
               ),
             ),
@@ -392,10 +425,12 @@ class _OrderHistoryPageState extends State<OrderHistoryPage> {
 class _OrderCard extends StatelessWidget {
   final OrderItem order;
   final VoidCallback onPayTap;
+  final VoidCallback onDetailTap;
 
   const _OrderCard({
     required this.order,
     required this.onPayTap,
+    required this.onDetailTap,
   });
 
   IconData get _icon {
@@ -603,30 +638,21 @@ class _OrderCard extends StatelessWidget {
                   ),
                   const SizedBox(width: 8),
                 ],
-                GestureDetector(
-                  onTap: () {
-                    Navigator.pushNamed(
-                      context,
-                      '/order-detail',
-                      arguments: OrderDetailArgs(
-                        id: order.id,
-                        date: order.date,
-                        summary: order.summary,
-                      ),
-                    );
-                  },
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(
-                        horizontal: 16, vertical: 9),
-                    decoration: BoxDecoration(
-                      color: _AppColors.buttonGrey,
-                      borderRadius: BorderRadius.circular(20),
-                    ),
-                    child: Text(
-                      'Detail Pesanan',
-                      style: GoogleFonts.poppins(
-                        fontSize: 11,
-                        color: Colors.black87,
+                Material(
+                  color: _AppColors.buttonGrey,
+                  borderRadius: BorderRadius.circular(20),
+                  child: InkWell(
+                    onTap: onDetailTap,
+                    borderRadius: BorderRadius.circular(20),
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 16, vertical: 9),
+                      child: Text(
+                        'Detail Pesanan',
+                        style: GoogleFonts.poppins(
+                          fontSize: 11,
+                          color: Colors.black87,
+                        ),
                       ),
                     ),
                   ),
