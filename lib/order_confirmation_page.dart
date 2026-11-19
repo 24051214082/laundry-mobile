@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 
 class _C {
   static const headerBlue = Color(0xFFD6EFFB);
@@ -24,8 +25,13 @@ class OrderSummary {
   final String deterjen;
   final String pewangi;
   final String metode;
+  final String pickupMethod;
+  final String deliveryMethod;
   final String jadwal;
   final String alamat;
+  final String catatan;
+  final int weightOrQty;
+  final int estimatedTotal;
   final List<CostItem> biaya;
   final String subtotal;
 
@@ -36,27 +42,164 @@ class OrderSummary {
     required this.deterjen,
     required this.pewangi,
     required this.metode,
+    this.pickupMethod = '',
+    this.deliveryMethod = '',
     required this.jadwal,
     required this.alamat,
+    this.catatan = '',
+    this.weightOrQty = 1,
+    this.estimatedTotal = 0,
     this.biaya = const [],
     this.subtotal = '',
   });
 
   /// Data contoh jika halaman dibuka tanpa arguments.
   static const OrderSummary dummy = OrderSummary(
-    jenisLaundry: 'Kiloan',
+    jenisLaundry: 'Laundry Kiloan',
     kecepatan: 'Express',
     pengerjaan: 'Cuci + Setrika',
     deterjen: 'Rinso Gentle',
     pewangi: 'Molto Floral',
     metode: 'Jemput: Penjemputan • Kirim: Diantar Kurir',
-    jadwal: '22 Oktober 2026 - 08.00',
+    pickupMethod: 'Penjemputan',
+    deliveryMethod: 'Diantar Kurir',
+    jadwal: '22 Oktober 2026, 08:00 WIB',
     alamat: 'Jl. Ketintang Baru No. 12, Surabaya',
+    weightOrQty: 7,
+    estimatedTotal: 20000,
   );
 }
 
-class OrderConfirmationPage extends StatelessWidget {
+class OrderConfirmationPage extends StatefulWidget {
   const OrderConfirmationPage({super.key});
+
+  @override
+  State<OrderConfirmationPage> createState() => _OrderConfirmationPageState();
+}
+
+class _OrderConfirmationPageState extends State<OrderConfirmationPage> {
+  bool _isSubmitting = false;
+
+  String _resolvePickupMethod(OrderSummary s) {
+    if (s.pickupMethod.trim().isNotEmpty) return s.pickupMethod.trim();
+    if (s.metode.contains('Antar Sendiri')) return 'Antar Sendiri';
+    return 'Penjemputan';
+  }
+
+  String _resolveDeliveryMethod(OrderSummary s) {
+    if (s.deliveryMethod.trim().isNotEmpty) return s.deliveryMethod.trim();
+    if (s.metode.contains('Ambil Sendiri')) return 'Ambil Sendiri';
+    return 'Diantar Kurir';
+  }
+
+  String _normalizeTreatment(String raw) {
+    final trimmed = raw.trim();
+    if (trimmed.toLowerCase() == 'cuci saja') return 'Cuci Saja';
+    return trimmed;
+  }
+
+  int _parseRupiahToInt(String text) {
+    final digitsOnly = text.replaceAll(RegExp(r'[^0-9]'), '');
+    return int.tryParse(digitsOnly) ?? 0;
+  }
+
+  Future<String> _generateNextOrderCode(SupabaseClient client) async {
+    try {
+      final rows = await client.from('orders').select('order_code');
+      var maxNumber = 0;
+
+      for (final row in rows) {
+        final rawCode = (row['order_code'] ?? '').toString();
+        final match = RegExp(r'(\d+)').firstMatch(rawCode);
+        if (match != null) {
+          final numVal = int.tryParse(match.group(1) ?? '') ?? 0;
+          if (numVal > maxNumber) {
+            maxNumber = numVal;
+          }
+        }
+      }
+
+      final nextNum = (maxNumber + 1).toString().padLeft(3, '0');
+      return '#WYW-$nextNum';
+    } catch (_) {
+      final fallbackNum =
+      (DateTime.now().millisecondsSinceEpoch % 900 + 100).toString();
+      return '#WYW-$fallbackNum';
+    }
+  }
+
+  Future<void> _submitOrder(BuildContext context, OrderSummary summary) async {
+    if (_isSubmitting) return;
+    setState(() => _isSubmitting = true);
+
+    try {
+      final client = Supabase.instance.client;
+      final currentUser = client.auth.currentUser;
+      final orderCode = await _generateNextOrderCode(client);
+
+      final totalPrice = summary.estimatedTotal > 0
+          ? summary.estimatedTotal
+          : _parseRupiahToInt(summary.subtotal);
+
+      final customerName = (currentUser?.userMetadata?['full_name'] ??
+          currentUser?.userMetadata?['name'] ??
+          currentUser?.email ??
+          'Pelanggan')
+          .toString();
+
+      final payload = <String, dynamic>{
+        'order_code': orderCode,
+        'customer_name': customerName,
+        'service_name': summary.jenisLaundry,
+        'speed': summary.kecepatan,
+        'treatment': _normalizeTreatment(summary.pengerjaan),
+        'detergent_name': summary.deterjen,
+        'perfume_name': summary.pewangi,
+        'pickup_method': _resolvePickupMethod(summary),
+        'delivery_method': _resolveDeliveryMethod(summary),
+        'pickup_schedule': summary.jadwal,
+        'address': summary.alamat,
+        'notes': summary.catatan.trim().isEmpty ? null : summary.catatan.trim(),
+        'weight_or_qty': summary.weightOrQty <= 0 ? 1 : summary.weightOrQty,
+        'total_price': totalPrice,
+        'status': 'Waiting',
+        'payment_status': 'Belum Lunas',
+      };
+
+      if (currentUser != null) {
+        payload['user_id'] = currentUser.id;
+      }
+
+      await client.from('orders').insert(payload);
+
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            'Pesanan $orderCode berhasil disimpan',
+            style: GoogleFonts.poppins(fontSize: 12),
+          ),
+        ),
+      );
+      Navigator.pushNamedAndRemoveUntil(
+        context,
+        '/home',
+            (route) => false,
+      );
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _isSubmitting = false);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          backgroundColor: Colors.redAccent,
+          content: Text(
+            'Gagal menyimpan pesanan: $e',
+            style: GoogleFonts.poppins(fontSize: 12),
+          ),
+        ),
+      );
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -81,7 +224,7 @@ class OrderConfirmationPage extends StatelessWidget {
               ),
             ),
           ),
-          _buildBottomButtons(context),
+          _buildBottomButtons(context, summary),
         ],
       ),
     );
@@ -101,7 +244,7 @@ class OrderConfirmationPage extends StatelessWidget {
       child: Row(
         children: [
           GestureDetector(
-            onTap: () => Navigator.maybePop(context),
+            onTap: _isSubmitting ? null : () => Navigator.maybePop(context),
             behavior: HitTestBehavior.opaque,
             child: const Padding(
               padding: EdgeInsets.all(4),
@@ -154,12 +297,14 @@ class OrderConfirmationPage extends StatelessWidget {
             children: [
               _DetailRow('Jenis Laundry', s.jenisLaundry),
               _DetailRow('Kecepatan Layanan', s.kecepatan),
-              _DetailRow('Pengerjaan', s.pengerjaan),
+              _DetailRow('Pengerjaan', _normalizeTreatment(s.pengerjaan)),
               _DetailRow('Deterjen', s.deterjen),
               _DetailRow('Pewangi', s.pewangi),
               _DetailRow('Metode Pengantaran', s.metode),
               _DetailRow('Jadwal Penjemputan', s.jadwal),
               _DetailRow('Alamat', s.alamat),
+              if (s.catatan.trim().isNotEmpty)
+                _DetailRow('Catatan', s.catatan.trim()),
             ],
           ),
         ),
@@ -185,7 +330,7 @@ class OrderConfirmationPage extends StatelessWidget {
           Expanded(
             child: Text(
               'Total tagihan akan dikonfirmasi setelah cucian diperiksa '
-              'oleh pihak laundry',
+                  'oleh pihak laundry',
               style: GoogleFonts.poppins(
                 fontSize: 11,
                 fontWeight: FontWeight.w500,
@@ -199,7 +344,7 @@ class OrderConfirmationPage extends StatelessWidget {
   }
 
   // ---- Tombol bawah -------------------------------------------------------
-  Widget _buildBottomButtons(BuildContext context) {
+  Widget _buildBottomButtons(BuildContext context, OrderSummary summary) {
     return Container(
       color: Colors.white,
       padding: EdgeInsets.fromLTRB(
@@ -215,7 +360,8 @@ class OrderConfirmationPage extends StatelessWidget {
             width: double.infinity,
             height: 42,
             child: OutlinedButton(
-              onPressed: () => Navigator.maybePop(context),
+              onPressed:
+              _isSubmitting ? null : () => Navigator.maybePop(context),
               style: OutlinedButton.styleFrom(
                 backgroundColor: Colors.white,
                 side: const BorderSide(color: _C.button),
@@ -238,21 +384,8 @@ class OrderConfirmationPage extends StatelessWidget {
             width: double.infinity,
             height: 42,
             child: ElevatedButton(
-              onPressed: () {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(
-                    content: Text(
-                      'Pesanan berhasil dikonfirmasi',
-                      style: GoogleFonts.poppins(fontSize: 12),
-                    ),
-                  ),
-                );
-                Navigator.pushNamedAndRemoveUntil(
-                  context,
-                  '/home',
-                  (route) => false,
-                );
-              },
+              onPressed:
+              _isSubmitting ? null : () => _submitOrder(context, summary),
               style: ElevatedButton.styleFrom(
                 backgroundColor: _C.button,
                 elevation: 0,
@@ -260,7 +393,16 @@ class OrderConfirmationPage extends StatelessWidget {
                   borderRadius: BorderRadius.circular(6),
                 ),
               ),
-              child: Text(
+              child: _isSubmitting
+                  ? const SizedBox(
+                width: 18,
+                height: 18,
+                child: CircularProgressIndicator(
+                  strokeWidth: 2,
+                  color: Colors.white,
+                ),
+              )
+                  : Text(
                 'Konfirmasi Pesanan',
                 style: GoogleFonts.poppins(
                   fontSize: 13,

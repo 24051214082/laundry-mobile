@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 import 'order_confirmation_page.dart';
 import 'user_profile_store.dart';
 
@@ -14,10 +15,20 @@ class _BookingPageState extends State<BookingPage> {
   // Nama Layanan yang diterima dari Homepage
   String _selectedService = 'Laundry Kiloan';
   bool _isInit = true;
+  bool _isLoadingOptions = true;
 
-  // Sub-kategori khusus Satuan (Harga paten per item)
+  // Tarif dasar layanan dari tabel `services` (fallback default jika kosong)
+  int _tarifMinimumKiloan = 20000;
+  final Map<dynamic, int> _hargaLayanan = {
+    'Laundry Kiloan': 20000,
+    'Laundry Satuan': 15000,
+    'Bed Cover': 25000,
+    'Boneka': 15000,
+  };
+
+  // Sub-kategori khusus Satuan (diambil dari tabel `satuan_items`)
   String _barangSatuan = 'Kaos';
-  static const Map<String, int> _hargaSatuan = {
+  Map<dynamic, int> _hargaSatuan = {
     'Kaos': 15000,
     'Kemeja': 15000,
     'Celana Pendek': 15000,
@@ -25,8 +36,20 @@ class _BookingPageState extends State<BookingPage> {
     'Jeans': 20000,
     'Jas': 30000,
     'Handuk': 15000,
-    'Set Seprei': 20000,
+    'Set Seprei': 25000,
   };
+
+  // Daftar Deterjen & Pewangi tersedia dari tabel `addons` (is_available == true)
+  final List<dynamic> _deterjenOptions = [
+    {'name': 'Rinso Gentle', 'price': 1000},
+    {'name': 'Attack Higienis', 'price': 1000},
+  ];
+
+  final List<dynamic> _pewangiOptions = [
+    {'name': 'Molto Floral', 'price': 1000},
+    {'name': 'Downy Mystique', 'price': 1000},
+    {'name': 'So Klin Pelembut', 'price': 1000},
+  ];
 
   // Kecepatan Layanan
   String _kecepatan = 'Reguler';
@@ -67,6 +90,135 @@ class _BookingPageState extends State<BookingPage> {
     final alamatUtama = UserProfileStore.instance.address;
     _alamatPenjemputan = TextEditingController(text: alamatUtama);
     _alamatPengiriman = TextEditingController(text: alamatUtama);
+
+    _loadBookingOptionsFromSupabase();
+  }
+
+  int _parseIntPrice(dynamic rawPrice, int fallback) {
+    if (rawPrice is int) return rawPrice;
+    if (rawPrice is double) return rawPrice.round();
+    return int.tryParse(rawPrice?.toString() ?? '') ?? fallback;
+  }
+
+  Future<void> _loadBookingOptionsFromSupabase() async {
+    try {
+      final client = Supabase.instance.client;
+
+      // 1. Ambil layanan dari tabel `services`
+      final servicesData = await client.from('services').select();
+      if (!mounted) return;
+
+      // 2. Ambil item satuan dari tabel `satuan_items`
+      final satuanData = await client.from('satuan_items').select();
+      if (!mounted) return;
+
+      // 3. Ambil add-on yang tersedia saja (is_available == true) dari tabel `addons`
+      final addonsData =
+      await client.from('addons').select().eq('is_available', true);
+      if (!mounted) return;
+
+      setState(() {
+        if (servicesData.isNotEmpty) {
+          for (final row in servicesData) {
+            final name = (row['name'] ?? '').toString().trim();
+            final price = _parseIntPrice(row['price'], 0);
+            if (name.isNotEmpty && price > 0) {
+              _hargaLayanan[name] = price;
+              if (name.toLowerCase().contains('kiloan') && price >= 10000) {
+                _tarifMinimumKiloan = price;
+              }
+            }
+          }
+        }
+
+        if (satuanData.isNotEmpty) {
+          final Map<dynamic, int> loadedSatuan = {};
+          for (final row in satuanData) {
+            final name = (row['name'] ?? '').toString().trim();
+            final price = _parseIntPrice(row['price'], 0);
+            if (name.isNotEmpty) {
+              loadedSatuan[name] = price;
+            }
+          }
+          if (loadedSatuan.isNotEmpty) {
+            _hargaSatuan = loadedSatuan;
+            if (!_hargaSatuan.containsKey(_barangSatuan)) {
+              _barangSatuan = _hargaSatuan.keys.first.toString();
+            }
+          }
+        }
+
+        if (addonsData.isNotEmpty) {
+          final deterjenList = [];
+          final pewangiList = [];
+
+          for (final row in addonsData) {
+            final category =
+            (row['category'] ?? '').toString().trim().toLowerCase();
+            final name = (row['name'] ?? '').toString().trim();
+            final price = _parseIntPrice(row['price'], 1000);
+
+            if (name.isEmpty) continue;
+
+            if (category == 'deterjen') {
+              deterjenList.add({'name': name, 'price': price});
+            } else if (category == 'pewangi') {
+              pewangiList.add({'name': name, 'price': price});
+            }
+          }
+
+          if (deterjenList.isNotEmpty) {
+            _deterjenOptions
+              ..clear()
+              ..addAll(deterjenList);
+            if (_deterjen != 'tanpa' &&
+                !_deterjenOptions.any((item) => item['name'] == _deterjen)) {
+              _deterjen = 'tanpa';
+            }
+          }
+
+          if (pewangiList.isNotEmpty) {
+            _pewangiOptions
+              ..clear()
+              ..addAll(pewangiList);
+            if (_pewangi != 'tanpa' &&
+                !_pewangiOptions.any((item) => item['name'] == _pewangi)) {
+              _pewangi = 'tanpa';
+            }
+          }
+        }
+
+        _isLoadingOptions = false;
+      });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _isLoadingOptions = false);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            'Gagal memuat opsi layanan terbaru: $e',
+            style: GoogleFonts.poppins(fontSize: 11.5),
+          ),
+        ),
+      );
+    }
+  }
+
+  int _getAddonPrice(List<dynamic> list, String name) {
+    for (final item in list) {
+      if (item['name'] == name) {
+        return _parseIntPrice(item['price'], 1000);
+      }
+    }
+    return 1000;
+  }
+
+  String _formatBadge(int price) {
+    if (price <= 0) return 'Gratis';
+    if (price % 1000 == 0) {
+      return '+Rp${price ~/ 1000}rb';
+    }
+    return '+${_rupiah(price)}';
   }
 
   @override
@@ -127,6 +279,14 @@ class _BookingPageState extends State<BookingPage> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
+            if (_isLoadingOptions) ...[
+              const LinearProgressIndicator(
+                color: Color(0xFF338CA8),
+                backgroundColor: Color(0xFFD6EFFB),
+              ),
+              const SizedBox(height: 12),
+            ],
+
             // ================= Banner Layanan Yang Dipilih dari Homepage =================
             Container(
               width: double.infinity,
@@ -159,10 +319,10 @@ class _BookingPageState extends State<BookingPage> {
                       _isBoneka
                           ? Icons.smart_toy_outlined
                           : _isSatuan
-                              ? Icons.checkroom_rounded
-                              : _isBedCover
-                                  ? Icons.bed_rounded
-                                  : Icons.scale_rounded,
+                          ? Icons.checkroom_rounded
+                          : _isBedCover
+                          ? Icons.bed_rounded
+                          : Icons.scale_rounded,
                       color: Colors.white,
                       size: 26,
                     ),
@@ -213,7 +373,8 @@ class _BookingPageState extends State<BookingPage> {
                 child: Wrap(
                   spacing: 8,
                   runSpacing: 6,
-                  children: _hargaSatuan.keys.map((item) {
+                  children: _hargaSatuan.keys.map((rawItem) {
+                    final item = rawItem.toString();
                     final isPicked = _barangSatuan == item;
                     return ChoiceChip(
                       label: Column(
@@ -224,14 +385,14 @@ class _BookingPageState extends State<BookingPage> {
                             style: GoogleFonts.poppins(
                               fontSize: 11,
                               fontWeight:
-                                  isPicked ? FontWeight.w600 : FontWeight.w400,
+                              isPicked ? FontWeight.w600 : FontWeight.w400,
                               color: isPicked
                                   ? Colors.white
                                   : const Color(0xFF28546A),
                             ),
                           ),
                           Text(
-                            _rupiah(_hargaSatuan[item]!),
+                            _rupiah(_hargaSatuan[rawItem] ?? 15000),
                             style: GoogleFonts.poppins(
                               fontSize: 9.5,
                               fontWeight: FontWeight.w500,
@@ -468,27 +629,18 @@ class _BookingPageState extends State<BookingPage> {
                           ),
                         ),
                         const SizedBox(height: 6),
-                        _buildRadioItem(
-                          label: 'Rinso Gentle',
-                          badge: '+Rp1rb',
-                          value: 'Rinso Gentle',
-                          groupValue: _deterjen,
-                          onChanged: (val) => setState(() => _deterjen = val!),
-                        ),
-                        _buildRadioItem(
-                          label: 'Attack Higienis',
-                          badge: '+Rp1rb',
-                          value: 'Attack Higienis',
-                          groupValue: _deterjen,
-                          onChanged: (val) => setState(() => _deterjen = val!),
-                        ),
-                        _buildRadioItem(
-                          label: 'So Klin Bio',
-                          badge: '+Rp1rb',
-                          value: 'So Klin Bio',
-                          groupValue: _deterjen,
-                          onChanged: (val) => setState(() => _deterjen = val!),
-                        ),
+                        ..._deterjenOptions.map((item) {
+                          final name = item['name'].toString();
+                          final price = _parseIntPrice(item['price'], 1000);
+                          return _buildRadioItem(
+                            label: name,
+                            badge: _formatBadge(price),
+                            value: name,
+                            groupValue: _deterjen,
+                            onChanged: (val) =>
+                                setState(() => _deterjen = val!),
+                          );
+                        }),
                         _buildRadioItem(
                           label: 'Standar / Bawa Sendiri',
                           value: 'tanpa',
@@ -513,27 +665,17 @@ class _BookingPageState extends State<BookingPage> {
                           ),
                         ),
                         const SizedBox(height: 6),
-                        _buildRadioItem(
-                          label: 'Molto Floral',
-                          badge: '+Rp1rb',
-                          value: 'Molto Floral',
-                          groupValue: _pewangi,
-                          onChanged: (val) => setState(() => _pewangi = val!),
-                        ),
-                        _buildRadioItem(
-                          label: 'Downy Mystique',
-                          badge: '+Rp1rb',
-                          value: 'Downy Mystique',
-                          groupValue: _pewangi,
-                          onChanged: (val) => setState(() => _pewangi = val!),
-                        ),
-                        _buildRadioItem(
-                          label: 'So Klin Pelembut',
-                          badge: '+Rp1rb',
-                          value: 'So Klin Pelembut',
-                          groupValue: _pewangi,
-                          onChanged: (val) => setState(() => _pewangi = val!),
-                        ),
+                        ..._pewangiOptions.map((item) {
+                          final name = item['name'].toString();
+                          final price = _parseIntPrice(item['price'], 1000);
+                          return _buildRadioItem(
+                            label: name,
+                            badge: _formatBadge(price),
+                            value: name,
+                            groupValue: _pewangi,
+                            onChanged: (val) => setState(() => _pewangi = val!),
+                          );
+                        }),
                         _buildRadioItem(
                           label: 'Standar / Bawa Sendiri',
                           value: 'tanpa',
@@ -588,7 +730,7 @@ class _BookingPageState extends State<BookingPage> {
                 if (_isAntarSendiri)
                   Container(
                     padding:
-                        const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                    const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
                     decoration: BoxDecoration(
                       color: Colors.grey.shade200,
                       borderRadius: BorderRadius.circular(4),
@@ -611,16 +753,16 @@ class _BookingPageState extends State<BookingPage> {
                       onTap: _isAntarSendiri
                           ? null
                           : () async {
-                              final picked = await showDatePicker(
-                                context: context,
-                                initialDate: _selectedDate,
-                                firstDate: DateTime(2026),
-                                lastDate: DateTime(2030),
-                              );
-                              if (picked != null) {
-                                setState(() => _selectedDate = picked);
-                              }
-                            },
+                        final picked = await showDatePicker(
+                          context: context,
+                          initialDate: _selectedDate,
+                          firstDate: DateTime(2026),
+                          lastDate: DateTime(2030),
+                        );
+                        if (picked != null) {
+                          setState(() => _selectedDate = picked);
+                        }
+                      },
                       child: _buildPickerBox(
                         icon: Icons.calendar_today_rounded,
                         label: 'Tanggal Jemput',
@@ -635,14 +777,14 @@ class _BookingPageState extends State<BookingPage> {
                       onTap: _isAntarSendiri
                           ? null
                           : () async {
-                              final picked = await showTimePicker(
-                                context: context,
-                                initialTime: _selectedTime,
-                              );
-                              if (picked != null) {
-                                setState(() => _selectedTime = picked);
-                              }
-                            },
+                        final picked = await showTimePicker(
+                          context: context,
+                          initialTime: _selectedTime,
+                        );
+                        if (picked != null) {
+                          setState(() => _selectedTime = picked);
+                        }
+                      },
                       child: _buildPickerBox(
                         icon: Icons.access_time_rounded,
                         label: 'Jam Jemput',
@@ -767,7 +909,7 @@ class _BookingPageState extends State<BookingPage> {
                 style: GoogleFonts.poppins(fontSize: 12),
                 decoration: const InputDecoration(
                   hintText:
-                      'Contoh: Pakaian putih dipisah / jahitan boneka rapuh.',
+                  'Contoh: Pakaian putih dipisah / jahitan boneka rapuh.',
                   border: InputBorder.none,
                   contentPadding: EdgeInsets.all(12),
                 ),
@@ -808,11 +950,8 @@ class _BookingPageState extends State<BookingPage> {
 
   // --- Perhitungan & Konfirmasi ---
 
-  static const int _tarifMinimumKiloan = 20000;
   static const int _biayaExpress = 5000;
   static const int _biayaSetrika = 5000;
-  static const int _biayaDeterjen = 1000;
-  static const int _biayaPewangi = 1000;
 
   static const List<String> _namaBulan = [
     'Januari',
@@ -874,7 +1013,7 @@ class _BookingPageState extends State<BookingPage> {
       return;
     }
 
-    final biaya = <CostItem>[];
+    final biaya = [];
     var subtotal = 0;
 
     void tambah(String label, int nilai) {
@@ -887,7 +1026,7 @@ class _BookingPageState extends State<BookingPage> {
       tambah('Tarif minimum kiloan (7kg)', _tarifMinimumKiloan);
     } else if (_isSatuan) {
       labelLayanan = 'Satuan: $_barangSatuan';
-      final hargaItem = _hargaSatuan[_barangSatuan]!;
+      final hargaItem = _hargaSatuan[_barangSatuan] ?? 15000;
       tambah('Satuan ($_barangSatuan)', hargaItem);
     } else {
       biaya.add(CostItem(_selectedService, 'Dihitung admin'));
@@ -897,8 +1036,14 @@ class _BookingPageState extends State<BookingPage> {
     if (_pengerjaan == 'Cuci + Setrika') {
       tambah('Layanan Cuci + Setrika', _biayaSetrika);
     }
-    if (_deterjen != 'tanpa') tambah('Deterjen ($_deterjen)', _biayaDeterjen);
-    if (_pewangi != 'tanpa') tambah('Pewangi ($_pewangi)', _biayaPewangi);
+    if (_deterjen != 'tanpa') {
+      tambah('Deterjen ($_deterjen)',
+          _getAddonPrice(_deterjenOptions, _deterjen));
+    }
+    if (_pewangi != 'tanpa') {
+      tambah(
+          'Pewangi ($_pewangi)', _getAddonPrice(_pewangiOptions, _pewangi));
+    }
 
     var finalAlamat = _isAntarSendiri
         ? 'Antar ke outlet: $_alamatLaundryOutlet'
@@ -911,6 +1056,8 @@ class _BookingPageState extends State<BookingPage> {
         ? 'Pelanggan antar langsung ke outlet'
         : '$_tanggalText, $_jamText';
 
+    final hasFixedEstimate = _selectedService == 'Laundry Kiloan' || _isSatuan;
+
     Navigator.pushNamed(
       context,
       '/order-confirmation',
@@ -921,12 +1068,16 @@ class _BookingPageState extends State<BookingPage> {
         deterjen: _deterjen == 'tanpa' ? 'Standar / Bawa Sendiri' : _deterjen,
         pewangi: _pewangi == 'tanpa' ? 'Standar / Bawa Sendiri' : _pewangi,
         metode: 'Jemput: $_metode • Kirim: $_pengiriman',
+        pickupMethod: _metode,
+        deliveryMethod: _pengiriman,
         jadwal: finalJadwal,
         alamat: finalAlamat,
-        biaya: biaya,
-        subtotal: (_selectedService == 'Laundry Kiloan' || _isSatuan)
-            ? _rupiah(subtotal)
-            : 'Menunggu Review Admin',
+        catatan: _catatan.text.trim(),
+        weightOrQty: _selectedService == 'Laundry Kiloan' ? 7 : 1,
+        estimatedTotal: hasFixedEstimate ? subtotal : 0,
+        biaya: List.castFrom(biaya),
+        subtotal:
+        hasFixedEstimate ? _rupiah(subtotal) : 'Menunggu Review Admin',
       ),
     );
   }
@@ -993,7 +1144,7 @@ class _BookingPageState extends State<BookingPage> {
               ),
               border: InputBorder.none,
               contentPadding:
-                  EdgeInsets.symmetric(vertical: 12, horizontal: 10),
+              EdgeInsets.symmetric(vertical: 12, horizontal: 10),
             ),
           ),
         ),
@@ -1062,7 +1213,7 @@ class _BookingPageState extends State<BookingPage> {
           borderRadius: BorderRadius.circular(10),
           border: Border.all(
             color:
-                isSelected ? const Color(0xFF338CA8) : const Color(0xFFCBD5E1),
+            isSelected ? const Color(0xFF338CA8) : const Color(0xFFCBD5E1),
             width: isSelected ? 1.8 : 1,
           ),
         ),
@@ -1154,7 +1305,7 @@ class _BookingPageState extends State<BookingPage> {
                             ? const Color(0xFF1B4E6C)
                             : const Color(0xFF475569),
                         fontWeight:
-                            isSelected ? FontWeight.w600 : FontWeight.w400,
+                        isSelected ? FontWeight.w600 : FontWeight.w400,
                       ),
                     ),
                   ),
@@ -1202,7 +1353,7 @@ class _BookingPageState extends State<BookingPage> {
           borderRadius: BorderRadius.circular(10),
           border: Border.all(
             color:
-                isSelected ? const Color(0xFF338CA8) : const Color(0xFFCBD5E1),
+            isSelected ? const Color(0xFF338CA8) : const Color(0xFFCBD5E1),
             width: isSelected ? 1.8 : 1,
           ),
         ),

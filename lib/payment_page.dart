@@ -29,6 +29,7 @@ class _PaymentPageState extends State<PaymentPage> {
   String _serviceName = 'Laundry Kiloan (5.0 kg)';
   String _totalAmount = 'Rp 35.000';
   bool _isInitialized = false;
+  bool _isUpdating = false;
 
   @override
   void initState() {
@@ -46,77 +47,146 @@ class _PaymentPageState extends State<PaymentPage> {
     if (!_isInitialized) {
       final args = ModalRoute.of(context)?.settings.arguments;
       if (args is Map<String, dynamic>) {
-        _orderId = args['orderId'] ?? _orderId;
-        _serviceName = args['serviceName'] ?? _serviceName;
-        _totalAmount = args['totalAmount'] ?? _totalAmount;
-        _isPaid = args['isPaid'] ?? _isPaid;
-        _paymentDate = args['paymentDate'] ?? _paymentDate;
+        _orderId = (args['orderId'] ?? _orderId).toString();
+        _serviceName = (args['serviceName'] ?? _serviceName).toString();
+        _totalAmount = (args['totalAmount'] ?? _totalAmount).toString();
+        _isPaid = args['isPaid'] is bool ? args['isPaid'] as bool : _isPaid;
+        _paymentDate = (args['paymentDate'] ?? _paymentDate).toString();
       }
       _isInitialized = true;
+    }
+  }
+
+  bool _looksLikeUuid(String value) {
+    return RegExp(
+      r'^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$',
+    ).hasMatch(value.trim());
+  }
+
+  Future<void> _updatePaymentInSupabase(BuildContext dialogContext) async {
+    if (_isUpdating) return;
+    setState(() => _isUpdating = true);
+
+    try {
+      final client = Supabase.instance.client;
+      final trimmedId = _orderId.trim();
+
+      final updatePayload = <String, dynamic>{
+        'payment_method': 'QRIS',
+        'payment_status': 'Lunas',
+      };
+
+      if (_looksLikeUuid(trimmedId)) {
+        await client.from('orders').update(updatePayload).eq('id', trimmedId);
+      } else {
+        await client
+            .from('orders')
+            .update(updatePayload)
+            .eq('order_code', trimmedId);
+      }
+
+      if (!mounted) return;
+      if (Navigator.canPop(dialogContext)) {
+        Navigator.pop(dialogContext);
+      }
+
+      setState(() {
+        _isUpdating = false;
+        _isPaid = true;
+        _paymentDate = 'Hari ini, Baru saja';
+      });
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          backgroundColor: const Color(0xFF16A34A),
+          content: Text(
+            'Pembayaran berhasil diverifikasi dan disimpan!',
+            style: GoogleFonts.poppins(fontSize: 12),
+          ),
+        ),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _isUpdating = false);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          backgroundColor: Colors.redAccent,
+          content: Text(
+            'Gagal memperbarui status pembayaran: $e',
+            style: GoogleFonts.poppins(fontSize: 12),
+          ),
+        ),
+      );
     }
   }
 
   void _confirmPayment() {
     showDialog(
       context: context,
-      builder: (context) => AlertDialog(
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
-        title: Text(
-          'Konfirmasi Pembayaran',
-          style: GoogleFonts.poppins(
-            fontSize: 16,
-            fontWeight: FontWeight.w700,
-            color: const Color(0xFF1B4E6C),
-          ),
-        ),
-        content: Text(
-          'Apakah kamu sudah menyelesaikan pembayaran sebesar $_totalAmount melalui QRIS?',
-          style: GoogleFonts.poppins(
-            fontSize: 12.5,
-            color: const Color(0xFF475569),
-          ),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: Text(
-              'Belum',
-              style: GoogleFonts.poppins(color: Colors.grey.shade600),
+      barrierDismissible: !_isUpdating,
+      builder: (dialogContext) => StatefulBuilder(
+        builder: (context, setDialogState) {
+          return AlertDialog(
+            shape:
+            RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
+            title: Text(
+              'Konfirmasi Pembayaran',
+              style: GoogleFonts.poppins(
+                fontSize: 16,
+                fontWeight: FontWeight.w700,
+                color: const Color(0xFF1B4E6C),
+              ),
             ),
-          ),
-          ElevatedButton(
-            onPressed: () {
-              Navigator.pop(context);
-              setState(() {
-                _isPaid = true;
-                _paymentDate = 'Hari ini, Baru saja';
-              });
-              ScaffoldMessenger.of(context).showSnackBar(
-                SnackBar(
-                  backgroundColor: const Color(0xFF16A34A),
-                  content: Text(
-                    'Pembayaran berhasil diverifikasi!',
-                    style: GoogleFonts.poppins(fontSize: 12),
+            content: Text(
+              'Apakah kamu sudah menyelesaikan pembayaran sebesar $_totalAmount melalui QRIS?',
+              style: GoogleFonts.poppins(
+                fontSize: 12.5,
+                color: const Color(0xFF475569),
+              ),
+            ),
+            actions: [
+              TextButton(
+                onPressed:
+                _isUpdating ? null : () => Navigator.pop(dialogContext),
+                child: Text(
+                  'Belum',
+                  style: GoogleFonts.poppins(color: Colors.grey.shade600),
+                ),
+              ),
+              ElevatedButton(
+                onPressed: _isUpdating
+                    ? null
+                    : () async {
+                  setDialogState(() {});
+                  await _updatePaymentInSupabase(dialogContext);
+                },
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: const Color(0xFF338CA8),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(10),
                   ),
                 ),
-              );
-            },
-            style: ElevatedButton.styleFrom(
-              backgroundColor: const Color(0xFF338CA8),
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(10),
+                child: _isUpdating
+                    ? const SizedBox(
+                  width: 16,
+                  height: 16,
+                  child: CircularProgressIndicator(
+                    strokeWidth: 2,
+                    color: Colors.white,
+                  ),
+                )
+                    : Text(
+                  'Ya, Sudah Bayar',
+                  style: GoogleFonts.poppins(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w600,
+                    color: Colors.white,
+                  ),
+                ),
               ),
-            ),
-            child: Text(
-              'Ya, Sudah Bayar',
-              style: GoogleFonts.poppins(
-                fontSize: 12,
-                fontWeight: FontWeight.w600,
-                color: Colors.white,
-              ),
-            ),
-          ),
-        ],
+            ],
+          );
+        },
       ),
     );
   }
@@ -619,4 +689,4 @@ class _QrisMockPainter extends CustomPainter {
 
   @override
   bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
-}
+}gi
