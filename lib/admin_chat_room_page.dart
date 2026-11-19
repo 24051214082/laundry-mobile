@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 
 class _C {
   static const headerBlue = Color(0xFFD6EFFB);
@@ -16,21 +17,18 @@ class AdminChatRoomPage extends StatefulWidget {
 }
 
 class _AdminChatRoomPageState extends State<AdminChatRoomPage> {
+  final _supabase = Supabase.instance.client;
   final TextEditingController _msgController = TextEditingController();
+  final ScrollController _scrollController = ScrollController();
 
-  // Daftar pesan percakapan (isAdmin: true = kanan/admin, false = kiri/customer)
-  final List _messages = [
-    {
-      'isAdmin': false,
-      'text': 'Halo Min, pesanan #LKN4wa123 saya kira-kira selesai jam berapa ya?',
-      'time': '09:14',
-    },
-    {
-      'isAdmin': true,
-      'text': 'Halo Kak Zea! Saat ini cuciannya sedang tahap penyetrikaan ya, estimasi selesai jam 11.00 WIB.',
-      'time': '09:15',
-    },
-  ];
+  bool _initializedArgs = false;
+  bool _isSending = false;
+  bool _isMarkingRead = false;
+
+  String _customerName = 'Zea';
+  String _orderId = '#LKN4wa123';
+  String _serviceName = 'Laundry Kiloan 5 kg';
+  String _status = 'Diproses';
 
   // Template balasan cepat untuk Admin
   final List _quickReplies = [
@@ -40,46 +38,129 @@ class _AdminChatRoomPageState extends State<AdminChatRoomPage> {
     'Pembayaran sudah kami terima, terima kasih!',
   ];
 
-  void _sendMessage([String? customText]) {
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    if (_initializedArgs) return;
+    _initializedArgs = true;
+
+    final args =
+    ModalRoute.of(context)?.settings.arguments as Map<String, dynamic>?;
+
+    if (args != null) {
+      final rawName = args['customerName']?.toString().trim();
+      if (rawName != null && rawName.isNotEmpty) {
+        _customerName = rawName;
+      }
+      final rawOrderId = args['orderId']?.toString().trim();
+      if (rawOrderId != null && rawOrderId.isNotEmpty) {
+        _orderId = rawOrderId;
+      }
+      final rawService = args['serviceName']?.toString().trim();
+      if (rawService != null && rawService.isNotEmpty) {
+        _serviceName = rawService;
+      }
+      final rawStatus = args['status']?.toString().trim();
+      if (rawStatus != null && rawStatus.isNotEmpty) {
+        _status = rawStatus;
+      }
+    }
+
+    _markCustomerMessagesAsRead();
+  }
+
+  Future<void> _markCustomerMessagesAsRead() async {
+    if (_isMarkingRead) return;
+    _isMarkingRead = true;
+    try {
+      await _supabase
+          .from('messages')
+          .update({'is_read': true})
+          .eq('order_code', _orderId)
+          .eq('sender_role', 'customer')
+          .eq('is_read', false);
+    } catch (_) {
+    } finally {
+      _isMarkingRead = false;
+    }
+  }
+
+  Future<void> _sendMessage([String? customText]) async {
     final text = (customText ?? _msgController.text).trim();
-    if (text.isEmpty) return;
+    if (text.isEmpty || _isSending) return;
 
-    final now = TimeOfDay.now();
-    final formattedTime =
-        '${now.hour.toString().padLeft(2, '0')}:${now.minute.toString().padLeft(2, '0')}';
+    setState(() => _isSending = true);
+    if (customText == null) {
+      _msgController.clear();
+    }
 
-    setState(() {
-      _messages.add({
-        'isAdmin': true,
-        'text': text,
-        'time': formattedTime,
+    try {
+      await _supabase.from('messages').insert({
+        'order_code': _orderId,
+        'sender_role': 'admin',
+        'sender_name': 'Admin Wish You Wash',
+        'message_text': text,
+        'is_read': false,
       });
+
+      _scrollToBottom();
+    } catch (e) {
+      if (!mounted) return;
       if (customText == null) {
-        _msgController.clear();
+        _msgController.text = text;
+      }
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          backgroundColor: Colors.redAccent,
+          content: Text(
+            'Gagal mengirim balasan: $e',
+            style: GoogleFonts.poppins(fontSize: 12),
+          ),
+        ),
+      );
+    } finally {
+      if (mounted) {
+        setState(() => _isSending = false);
+      }
+    }
+  }
+
+  void _scrollToBottom() {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (_scrollController.hasClients) {
+        _scrollController.animateTo(
+          _scrollController.position.maxScrollExtent + 120,
+          duration: const Duration(milliseconds: 220),
+          curve: Curves.easeOut,
+        );
       }
     });
+  }
+
+  String _formatTime(dynamic rawCreatedAt) {
+    if (rawCreatedAt == null) {
+      final now = TimeOfDay.now();
+      return '${now.hour.toString().padLeft(2, '0')}:${now.minute.toString().padLeft(2, '0')}';
+    }
+    final dt = DateTime.tryParse(rawCreatedAt.toString())?.toLocal();
+    if (dt == null) return '';
+    return '${dt.hour.toString().padLeft(2, '0')}:${dt.minute.toString().padLeft(2, '0')}';
   }
 
   @override
   void dispose() {
     _msgController.dispose();
+    _scrollController.dispose();
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
-    // Menerima argumen dari Chat List Admin atau Detail Pesanan
-    final args =
-        ModalRoute.of(context)?.settings.arguments as Map<String, dynamic>?;
-
-    final String customerName =
-        args?['customerName']?.toString() ?? 'Zea';
-    final String orderId =
-        args?['orderId']?.toString() ?? '#LKN4wa123';
-    final String serviceName =
-        args?['serviceName']?.toString() ?? 'Laundry Kiloan 5 kg';
-    final String status =
-        args?['status']?.toString() ?? 'Diproses';
+    final messageStream = _supabase
+        .from('messages')
+        .stream(primaryKey: ['id'])
+        .eq('order_code', _orderId)
+        .order('created_at', ascending: true);
 
     return Scaffold(
       backgroundColor: const Color(0xFFF8FAFC),
@@ -111,7 +192,7 @@ class _AdminChatRoomPageState extends State<AdminChatRoomPage> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  customerName,
+                  _customerName,
                   style: GoogleFonts.poppins(
                     fontSize: 14.5,
                     fontWeight: FontWeight.w700,
@@ -168,7 +249,7 @@ class _AdminChatRoomPageState extends State<AdminChatRoomPage> {
                       Row(
                         children: [
                           Text(
-                            orderId,
+                            _orderId,
                             style: GoogleFonts.poppins(
                               fontSize: 12,
                               fontWeight: FontWeight.w700,
@@ -186,7 +267,7 @@ class _AdminChatRoomPageState extends State<AdminChatRoomPage> {
                               borderRadius: BorderRadius.circular(6),
                             ),
                             child: Text(
-                              status,
+                              _status,
                               style: GoogleFonts.poppins(
                                 fontSize: 9.5,
                                 fontWeight: FontWeight.w600,
@@ -197,7 +278,7 @@ class _AdminChatRoomPageState extends State<AdminChatRoomPage> {
                         ],
                       ),
                       Text(
-                        serviceName,
+                        _serviceName,
                         style: GoogleFonts.poppins(
                           fontSize: 11,
                           color: const Color(0xFF64748B),
@@ -225,71 +306,142 @@ class _AdminChatRoomPageState extends State<AdminChatRoomPage> {
 
           // Daftar Pesan Chat
           Expanded(
-            child: ListView.builder(
-              padding: const EdgeInsets.all(16),
-              physics: const BouncingScrollPhysics(),
-              itemCount: _messages.length,
-              itemBuilder: (context, index) {
-                final msg = _messages[index];
-                final bool isAdmin = msg['isAdmin'] == true;
-                final String textContent = (msg['text'] ?? '').toString();
-                final String timeContent = (msg['time'] ?? '').toString();
-
-                return Align(
-                  alignment:
-                      isAdmin ? Alignment.centerRight : Alignment.centerLeft,
-                  child: Container(
-                    margin: const EdgeInsets.only(bottom: 12),
-                    constraints: BoxConstraints(
-                      maxWidth: MediaQuery.of(context).size.width * 0.76,
-                    ),
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 14,
-                      vertical: 10,
-                    ),
-                    decoration: BoxDecoration(
-                      color: isAdmin ? _C.bubbleAdmin : _C.bubbleCustomer,
-                      borderRadius: BorderRadius.only(
-                        topLeft: const Radius.circular(16),
-                        topRight: const Radius.circular(16),
-                        bottomLeft: Radius.circular(isAdmin ? 16 : 4),
-                        bottomRight: Radius.circular(isAdmin ? 4 : 16),
+            child: StreamBuilder(
+              stream: messageStream,
+              builder: (context, snapshot) {
+                if (snapshot.hasError) {
+                  return Center(
+                    child: Padding(
+                      padding: const EdgeInsets.all(20),
+                      child: Text(
+                        'Gagal memuat pesan: ${snapshot.error}',
+                        textAlign: TextAlign.center,
+                        style: GoogleFonts.poppins(
+                          fontSize: 12,
+                          color: Colors.redAccent,
+                        ),
                       ),
-                      boxShadow: [
-                        BoxShadow(
-                          color: Colors.black.withValues(alpha: 0.03),
-                          blurRadius: 4,
-                          offset: const Offset(0, 2),
-                        ),
-                      ],
                     ),
-                    child: Column(
-                      crossAxisAlignment: isAdmin
-                          ? CrossAxisAlignment.end
-                          : CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          textContent,
-                          style: GoogleFonts.poppins(
-                            fontSize: 12.5,
-                            color: isAdmin
-                                ? Colors.white
-                                : const Color(0xFF1E293B),
-                          ),
+                  );
+                }
+
+                if (!snapshot.hasData) {
+                  return const Center(
+                    child: CircularProgressIndicator(color: Color(0xFF338CA8)),
+                  );
+                }
+
+                final rawList = (snapshot.data as List);
+                final seenIds = <String>{};
+                final messages = [];
+
+                for (final e in rawList) {
+                  final map = Map<String, dynamic>.from(e as Map);
+                  final idStr = map['id']?.toString() ?? '';
+                  if (idStr.isNotEmpty) {
+                    if (seenIds.contains(idStr)) continue;
+                    seenIds.add(idStr);
+                  }
+                  messages.add(map);
+                }
+
+                final hasUnreadCustomer = messages.any(
+                      (m) =>
+                  m['sender_role']?.toString() == 'customer' &&
+                      m['is_read'] == false,
+                );
+                if (hasUnreadCustomer && !_isMarkingRead) {
+                  WidgetsBinding.instance.addPostFrameCallback((_) {
+                    _markCustomerMessagesAsRead();
+                  });
+                }
+
+                if (messages.isEmpty) {
+                  return Center(
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 24),
+                      child: Text(
+                        'Belum ada pesan untuk pesanan $_orderId.',
+                        textAlign: TextAlign.center,
+                        style: GoogleFonts.poppins(
+                          fontSize: 12,
+                          color: const Color(0xFF64748B),
                         ),
-                        const SizedBox(height: 4),
-                        Text(
-                          timeContent,
-                          style: GoogleFonts.poppins(
-                            fontSize: 9.5,
-                            color: isAdmin
-                                ? Colors.white70
-                                : const Color(0xFF94A3B8),
-                          ),
-                        ),
-                      ],
+                      ),
                     ),
-                  ),
+                  );
+                }
+
+                return ListView.builder(
+                  controller: _scrollController,
+                  padding: const EdgeInsets.all(16),
+                  physics: const BouncingScrollPhysics(),
+                  itemCount: messages.length,
+                  itemBuilder: (context, index) {
+                    final msg = Map<String, dynamic>.from(messages[index] as Map);
+                    final bool isAdmin =
+                        msg['sender_role']?.toString() == 'admin';
+                    final String textContent =
+                    (msg['message_text'] ?? '').toString();
+                    final String timeContent = _formatTime(msg['created_at']);
+
+                    return Align(
+                      alignment:
+                      isAdmin ? Alignment.centerRight : Alignment.centerLeft,
+                      child: Container(
+                        margin: const EdgeInsets.only(bottom: 12),
+                        constraints: BoxConstraints(
+                          maxWidth: MediaQuery.of(context).size.width * 0.76,
+                        ),
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 14,
+                          vertical: 10,
+                        ),
+                        decoration: BoxDecoration(
+                          color: isAdmin ? _C.bubbleAdmin : _C.bubbleCustomer,
+                          borderRadius: BorderRadius.only(
+                            topLeft: const Radius.circular(16),
+                            topRight: const Radius.circular(16),
+                            bottomLeft: Radius.circular(isAdmin ? 16 : 4),
+                            bottomRight: Radius.circular(isAdmin ? 4 : 16),
+                          ),
+                          boxShadow: [
+                            BoxShadow(
+                              color: Colors.black.withValues(alpha: 0.03),
+                              blurRadius: 4,
+                              offset: const Offset(0, 2),
+                            ),
+                          ],
+                        ),
+                        child: Column(
+                          crossAxisAlignment: isAdmin
+                              ? CrossAxisAlignment.end
+                              : CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              textContent,
+                              style: GoogleFonts.poppins(
+                                fontSize: 12.5,
+                                color: isAdmin
+                                    ? Colors.white
+                                    : const Color(0xFF1E293B),
+                              ),
+                            ),
+                            const SizedBox(height: 4),
+                            Text(
+                              timeContent,
+                              style: GoogleFonts.poppins(
+                                fontSize: 9.5,
+                                color: isAdmin
+                                    ? Colors.white70
+                                    : const Color(0xFF94A3B8),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    );
+                  },
                 );
               },
             ),
@@ -306,7 +458,9 @@ class _AdminChatRoomPageState extends State<AdminChatRoomPage> {
               separatorBuilder: (_, __) => const SizedBox(width: 8),
               itemBuilder: (context, index) {
                 return GestureDetector(
-                  onTap: () => _sendMessage(_quickReplies[index]),
+                  onTap: _isSending
+                      ? null
+                      : () => _sendMessage(_quickReplies[index].toString()),
                   child: Container(
                     padding: const EdgeInsets.symmetric(horizontal: 12),
                     alignment: Alignment.center,
@@ -318,7 +472,7 @@ class _AdminChatRoomPageState extends State<AdminChatRoomPage> {
                       ),
                     ),
                     child: Text(
-                      _quickReplies[index],
+                      _quickReplies[index].toString(),
                       style: GoogleFonts.poppins(
                         fontSize: 11,
                         fontWeight: FontWeight.w500,
@@ -371,14 +525,23 @@ class _AdminChatRoomPageState extends State<AdminChatRoomPage> {
                 ),
                 const SizedBox(width: 8),
                 GestureDetector(
-                  onTap: () => _sendMessage(),
+                  onTap: _isSending ? null : () => _sendMessage(),
                   child: Container(
                     padding: const EdgeInsets.all(11),
                     decoration: const BoxDecoration(
                       color: Color(0xFF338CA8),
                       shape: BoxShape.circle,
                     ),
-                    child: const Icon(
+                    child: _isSending
+                        ? const SizedBox(
+                      width: 18,
+                      height: 18,
+                      child: CircularProgressIndicator(
+                        strokeWidth: 2,
+                        color: Colors.white,
+                      ),
+                    )
+                        : const Icon(
                       Icons.send_rounded,
                       size: 18,
                       color: Colors.white,

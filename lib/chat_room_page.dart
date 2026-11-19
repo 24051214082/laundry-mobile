@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
+import 'user_session.dart';
 
 class _C {
   static const headerBlue = Color(0xFFD6EFFB);
@@ -17,56 +19,149 @@ class ChatRoomPage extends StatefulWidget {
 }
 
 class _ChatRoomPageState extends State<ChatRoomPage> {
+  final _supabase = Supabase.instance.client;
   final TextEditingController _msgController = TextEditingController();
+  final ScrollController _scrollController = ScrollController();
 
-  // Daftar pesan percakapan
-  final List _messages = [
-    {
-      'isUser': false,
-      'text':
-          'Halo Kak Zea! Ada yang bisa kami bantu terkait pesanan laundry-nya?',
-      'time': '09:15',
-    },
-  ];
+  bool _initializedArgs = false;
+  bool _isSending = false;
+  bool _isMarkingRead = false;
 
-  // Fungsi mengirim pesan
-  void _sendMessage() {
-    if (_msgController.text.trim().isEmpty) return;
+  String _orderId = '#LKN4wa123';
+  String _serviceName = 'Laundry Kiloan 5 kg';
+  String _status = 'Diproses';
 
-    final now = TimeOfDay.now();
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    if (_initializedArgs) return;
+    _initializedArgs = true;
 
-    final formattedTime =
-        '${now.hour.toString().padLeft(2, '0')}:${now.minute.toString().padLeft(2, '0')}';
+    final args =
+    ModalRoute.of(context)?.settings.arguments as Map<String, dynamic>?;
 
-    setState(() {
-      _messages.add({
-        'isUser': true,
-        'text': _msgController.text.trim(),
-        'time': formattedTime,
+    if (args != null) {
+      final rawOrderId = args['orderId']?.toString().trim();
+      if (rawOrderId != null && rawOrderId.isNotEmpty) {
+        _orderId = rawOrderId;
+      }
+      final rawService = args['serviceName']?.toString().trim();
+      if (rawService != null && rawService.isNotEmpty) {
+        _serviceName = rawService;
+      }
+      final rawStatus = args['status']?.toString().trim();
+      if (rawStatus != null && rawStatus.isNotEmpty) {
+        _status = rawStatus;
+      }
+    }
+
+    _markAdminMessagesAsRead();
+  }
+
+  String get _currentUserName {
+    try {
+      final dynamic session = UserSession;
+      final name = (session.userName ??
+          session.fullName ??
+          session.name ??
+          session.email ??
+          'Customer')
+          .toString()
+          .trim();
+      return name.isEmpty ? 'Customer' : name;
+    } catch (_) {
+      return 'Customer';
+    }
+  }
+
+  Future<void> _markAdminMessagesAsRead() async {
+    if (_isMarkingRead) return;
+    _isMarkingRead = true;
+    try {
+      await _supabase
+          .from('messages')
+          .update({'is_read': true})
+          .eq('order_code', _orderId)
+          .eq('sender_role', 'admin')
+          .eq('is_read', false);
+    } catch (_) {
+    } finally {
+      _isMarkingRead = false;
+    }
+  }
+
+  Future<void> _sendMessage() async {
+    final text = _msgController.text.trim();
+    if (text.isEmpty || _isSending) return;
+
+    setState(() => _isSending = true);
+    _msgController.clear();
+
+    try {
+      await _supabase.from('messages').insert({
+        'order_code': _orderId,
+        'sender_role': 'customer',
+        'sender_name': _currentUserName,
+        'message_text': text,
+        'is_read': false,
       });
 
-      _msgController.clear();
+      _scrollToBottom();
+    } catch (e) {
+      if (!mounted) return;
+      _msgController.text = text;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          backgroundColor: Colors.redAccent,
+          content: Text(
+            'Gagal mengirim pesan: $e',
+            style: GoogleFonts.poppins(fontSize: 12),
+          ),
+        ),
+      );
+    } finally {
+      if (mounted) {
+        setState(() => _isSending = false);
+      }
+    }
+  }
+
+  void _scrollToBottom() {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (_scrollController.hasClients) {
+        _scrollController.animateTo(
+          _scrollController.position.maxScrollExtent + 120,
+          duration: const Duration(milliseconds: 220),
+          curve: Curves.easeOut,
+        );
+      }
     });
+  }
+
+  String _formatTime(dynamic rawCreatedAt) {
+    if (rawCreatedAt == null) {
+      final now = TimeOfDay.now();
+      return '${now.hour.toString().padLeft(2, '0')}:${now.minute.toString().padLeft(2, '0')}';
+    }
+    final dt = DateTime.tryParse(rawCreatedAt.toString())?.toLocal();
+    if (dt == null) return '';
+    return '${dt.hour.toString().padLeft(2, '0')}:${dt.minute.toString().padLeft(2, '0')}';
   }
 
   @override
   void dispose() {
     _msgController.dispose();
+    _scrollController.dispose();
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
-    // Menerima argumen dari Order Detail atau Chat List
-    final args =
-        ModalRoute.of(context)?.settings.arguments as Map<String, dynamic>?;
-
-    final String orderId = args?['orderId']?.toString() ?? '#LKN4wa123';
-
-    final String serviceName =
-        args?['serviceName']?.toString() ?? 'Laundry Kiloan 5 kg';
-
-    final String status = args?['status']?.toString() ?? 'Diproses';
+    final messageStream = _supabase
+        .from('messages')
+        .stream(primaryKey: ['id'])
+        .eq('order_code', _orderId)
+        .order('created_at', ascending: true);
 
     return Scaffold(
       backgroundColor: const Color(0xFFF8FAFC),
@@ -162,7 +257,7 @@ class _ChatRoomPageState extends State<ChatRoomPage> {
                       Row(
                         children: [
                           Text(
-                            orderId,
+                            _orderId,
                             style: GoogleFonts.poppins(
                               fontSize: 12,
                               fontWeight: FontWeight.w700,
@@ -180,7 +275,7 @@ class _ChatRoomPageState extends State<ChatRoomPage> {
                               borderRadius: BorderRadius.circular(6),
                             ),
                             child: Text(
-                              status,
+                              _status,
                               style: GoogleFonts.poppins(
                                 fontSize: 9.5,
                                 fontWeight: FontWeight.w600,
@@ -191,7 +286,7 @@ class _ChatRoomPageState extends State<ChatRoomPage> {
                         ],
                       ),
                       Text(
-                        serviceName,
+                        _serviceName,
                         style: GoogleFonts.poppins(
                           fontSize: 11,
                           color: const Color(0xFF64748B),
@@ -200,17 +295,15 @@ class _ChatRoomPageState extends State<ChatRoomPage> {
                     ],
                   ),
                 ),
-
-                // ⬇️ UBAHAN DI SINI: Navigasi langsung ke halaman Status Pesanan
                 TextButton(
                   onPressed: () {
                     Navigator.pushNamed(
                       context,
                       '/status-pesanan',
                       arguments: {
-                        'orderId': orderId,
-                        'serviceName': serviceName,
-                        'status': status,
+                        'orderId': _orderId,
+                        'serviceName': _serviceName,
+                        'status': _status,
                         'weight': '5.0 kg',
                         'treatment': 'Cuci + Setrika',
                         'perfume': 'Ocean Fresh',
@@ -238,78 +331,146 @@ class _ChatRoomPageState extends State<ChatRoomPage> {
 
           // Daftar Pesan Chat
           Expanded(
-            child: ListView.builder(
-              padding: const EdgeInsets.all(16),
-              physics: const BouncingScrollPhysics(),
-              itemCount: _messages.length,
-              itemBuilder: (context, index) {
-                final msg = _messages[index];
-
-                final bool isUser = msg['isUser'] == true;
-
-                final String textContent = (msg['text'] ?? '').toString();
-
-                final String timeContent = (msg['time'] ?? '').toString();
-
-                return Align(
-                  alignment:
-                      isUser ? Alignment.centerRight : Alignment.centerLeft,
-                  child: Container(
-                    margin: const EdgeInsets.only(bottom: 12),
-                    constraints: BoxConstraints(
-                      maxWidth: MediaQuery.of(context).size.width * 0.76,
-                    ),
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 14,
-                      vertical: 10,
-                    ),
-                    decoration: BoxDecoration(
-                      color: isUser ? _C.bubbleUser : _C.bubbleAdmin,
-                      borderRadius: BorderRadius.only(
-                        topLeft: const Radius.circular(16),
-                        topRight: const Radius.circular(16),
-                        bottomLeft: Radius.circular(
-                          isUser ? 16 : 4,
-                        ),
-                        bottomRight: Radius.circular(
-                          isUser ? 4 : 16,
+            child: StreamBuilder(
+              stream: messageStream,
+              builder: (context, snapshot) {
+                if (snapshot.hasError) {
+                  return Center(
+                    child: Padding(
+                      padding: const EdgeInsets.all(20),
+                      child: Text(
+                        'Gagal memuat pesan: ${snapshot.error}',
+                        textAlign: TextAlign.center,
+                        style: GoogleFonts.poppins(
+                          fontSize: 12,
+                          color: Colors.redAccent,
                         ),
                       ),
-                      boxShadow: [
-                        BoxShadow(
-                          color: Colors.black.withValues(alpha: 0.03),
-                          blurRadius: 4,
-                          offset: const Offset(0, 2),
-                        ),
-                      ],
                     ),
-                    child: Column(
-                      crossAxisAlignment: isUser
-                          ? CrossAxisAlignment.end
-                          : CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          textContent,
-                          style: GoogleFonts.poppins(
-                            fontSize: 12.5,
-                            color: isUser
-                                ? Colors.white
-                                : const Color(0xFF1E293B),
-                          ),
+                  );
+                }
+
+                if (!snapshot.hasData) {
+                  return const Center(
+                    child: CircularProgressIndicator(color: Color(0xFF338CA8)),
+                  );
+                }
+
+                final rawList = (snapshot.data as List);
+                final seenIds = <String>{};
+                final List messages = [];
+
+                for (final e in rawList) {
+                  final map = Map<String, dynamic>.from(e as Map);
+                  final idStr = map['id']?.toString() ?? '';
+                  if (idStr.isNotEmpty) {
+                    if (seenIds.contains(idStr)) continue;
+                    seenIds.add(idStr);
+                  }
+                  messages.add(map);
+                }
+
+                final hasUnreadAdmin = messages.any(
+                      (m) =>
+                  m['sender_role']?.toString() == 'admin' &&
+                      m['is_read'] == false,
+                );
+                if (hasUnreadAdmin && !_isMarkingRead) {
+                  WidgetsBinding.instance.addPostFrameCallback((_) {
+                    _markAdminMessagesAsRead();
+                  });
+                }
+
+                if (messages.isEmpty) {
+                  return Center(
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 24),
+                      child: Text(
+                        'Belum ada pesan untuk pesanan $_orderId.\nMulai chat dengan admin di bawah ini.',
+                        textAlign: TextAlign.center,
+                        style: GoogleFonts.poppins(
+                          fontSize: 12,
+                          color: const Color(0xFF64748B),
                         ),
-                        const SizedBox(height: 4),
-                        Text(
-                          timeContent,
-                          style: GoogleFonts.poppins(
-                            fontSize: 9.5,
-                            color: isUser
-                                ? Colors.white70
-                                : const Color(0xFF94A3B8),
-                          ),
-                        ),
-                      ],
+                      ),
                     ),
-                  ),
+                  );
+                }
+
+                return ListView.builder(
+                  controller: _scrollController,
+                  padding: const EdgeInsets.all(16),
+                  physics: const BouncingScrollPhysics(),
+                  itemCount: messages.length,
+                  itemBuilder: (context, index) {
+                    final msg = messages[index];
+                    final bool isUser =
+                        msg['sender_role']?.toString() == 'customer';
+                    final String textContent =
+                    (msg['message_text'] ?? '').toString();
+                    final String timeContent = _formatTime(msg['created_at']);
+
+                    return Align(
+                      alignment:
+                      isUser ? Alignment.centerRight : Alignment.centerLeft,
+                      child: Container(
+                        margin: const EdgeInsets.only(bottom: 12),
+                        constraints: BoxConstraints(
+                          maxWidth: MediaQuery.of(context).size.width * 0.76,
+                        ),
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 14,
+                          vertical: 10,
+                        ),
+                        decoration: BoxDecoration(
+                          color: isUser ? _C.bubbleUser : _C.bubbleAdmin,
+                          borderRadius: BorderRadius.only(
+                            topLeft: const Radius.circular(16),
+                            topRight: const Radius.circular(16),
+                            bottomLeft: Radius.circular(
+                              isUser ? 16 : 4,
+                            ),
+                            bottomRight: Radius.circular(
+                              isUser ? 4 : 16,
+                            ),
+                          ),
+                          boxShadow: [
+                            BoxShadow(
+                              color: Colors.black.withValues(alpha: 0.03),
+                              blurRadius: 4,
+                              offset: const Offset(0, 2),
+                            ),
+                          ],
+                        ),
+                        child: Column(
+                          crossAxisAlignment: isUser
+                              ? CrossAxisAlignment.end
+                              : CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              textContent,
+                              style: GoogleFonts.poppins(
+                                fontSize: 12.5,
+                                color: isUser
+                                    ? Colors.white
+                                    : const Color(0xFF1E293B),
+                              ),
+                            ),
+                            const SizedBox(height: 4),
+                            Text(
+                              timeContent,
+                              style: GoogleFonts.poppins(
+                                fontSize: 9.5,
+                                color: isUser
+                                    ? Colors.white70
+                                    : const Color(0xFF94A3B8),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    );
+                  },
                 );
               },
             ),
@@ -359,14 +520,23 @@ class _ChatRoomPageState extends State<ChatRoomPage> {
                 ),
                 const SizedBox(width: 8),
                 GestureDetector(
-                  onTap: _sendMessage,
+                  onTap: _isSending ? null : _sendMessage,
                   child: Container(
                     padding: const EdgeInsets.all(11),
                     decoration: const BoxDecoration(
                       color: Color(0xFF338CA8),
                       shape: BoxShape.circle,
                     ),
-                    child: const Icon(
+                    child: _isSending
+                        ? const SizedBox(
+                      width: 18,
+                      height: 18,
+                      child: CircularProgressIndicator(
+                        strokeWidth: 2,
+                        color: Colors.white,
+                      ),
+                    )
+                        : const Icon(
                       Icons.send_rounded,
                       size: 18,
                       color: Colors.white,
