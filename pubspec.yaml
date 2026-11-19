@@ -19,6 +19,7 @@ dependencies:
 
   # Package intl untuk format mata uang/tanggal nanti
   intl: ^0.19.0
+  supabase_flutter: ^2.18.3
 
 dev_dependencies:
   flutter_test:

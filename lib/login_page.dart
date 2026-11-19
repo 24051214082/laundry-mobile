@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 
 class LoginPage extends StatefulWidget {
   const LoginPage({super.key});
@@ -13,19 +14,7 @@ class _LoginPageState extends State<LoginPage> {
   final TextEditingController _emailController = TextEditingController();
   final TextEditingController _passwordController = TextEditingController();
   bool _obscurePassword = true;
-
-  // ⬇️ TAMBAHAN 1: Kredensial Khusus Admin & Fungsi Hash Sederhana
-  static const String _adminEmail = 'admin@wishyouwash.com';
-    // Langsung hitung otomatis dari teks 'admin123' biar 100% akurat
-    late final int _adminPasswordHash = _simpleHash('admin123');
-
-  int _simpleHash(String text) {
-    int hash = 0;
-    for (int i = 0; i < text.length; i++) {
-      hash = 31 * hash + text.codeUnitAt(i);
-    }
-    return hash;
-  }
+  bool _isLoading = false;
 
   @override
   void dispose() {
@@ -34,32 +23,56 @@ class _LoginPageState extends State<LoginPage> {
     super.dispose();
   }
 
-  // ⬇️ TAMBAHAN 2: Pengecekan Role Admin vs Customer saat Login
-  void _handleLogin() {
-    if (_formKey.currentState!.validate()) {
-      final email = _emailController.text.trim().toLowerCase();
-      final password = _passwordController.text;
+  Future<void> _handleLogin() async {
+    if (!_formKey.currentState!.validate()) return;
 
-      // 1. Cek jika menggunakan email Admin
-      if (email == _adminEmail) {
-        if (_simpleHash(password) == _adminPasswordHash) {
-          Navigator.pushReplacementNamed(context, '/admin-home');
-        } else {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              backgroundColor: Colors.redAccent,
-              content: Text(
-                'Password Admin salah!',
-                style: GoogleFonts.poppins(fontSize: 12),
-              ),
+    setState(() => _isLoading = true);
+
+    final email = _emailController.text.trim().toLowerCase();
+    final password = _passwordController.text;
+
+    try {
+      final response = await Supabase.instance.client
+          .from('users')
+          .select()
+          .eq('email', email)
+          .eq('password_hash', password)
+          .maybeSingle();
+
+      if (!mounted) return;
+
+      if (response == null) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            backgroundColor: Colors.redAccent,
+            content: Text(
+              'Email atau password salah!',
+              style: GoogleFonts.poppins(fontSize: 12),
             ),
-          );
-        }
+          ),
+        );
         return;
       }
 
-      // 2. Selain email admin, masuk ke halaman utama Customer
-      Navigator.pushReplacementNamed(context, '/home');
+      final role = response['role'] as String? ?? 'customer';
+      if (role == 'admin') {
+        Navigator.pushReplacementNamed(context, '/admin-home');
+      } else {
+        Navigator.pushReplacementNamed(context, '/home');
+      }
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          backgroundColor: Colors.redAccent,
+          content: Text(
+            'Gagal terhubung ke database: $e',
+            style: GoogleFonts.poppins(fontSize: 12),
+          ),
+        ),
+      );
+    } finally {
+      if (mounted) setState(() => _isLoading = false);
     }
   }
 
@@ -200,7 +213,6 @@ class _LoginPageState extends State<LoginPage> {
                     const EdgeInsets.symmetric(horizontal: 24, vertical: 20),
                 child: Column(
                   children: [
-                    // Tiga titik hiasan kiri dan kanan atas
                     Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
@@ -235,7 +247,6 @@ class _LoginPageState extends State<LoginPage> {
                       ],
                     ),
                     const SizedBox(height: 16),
-                    // Tampilan Logo dari Assets
                     Center(
                       child: Transform.scale(
                         scale: 1.1,
@@ -329,7 +340,7 @@ class _LoginPageState extends State<LoginPage> {
                         width: double.infinity,
                         height: 52,
                         child: ElevatedButton(
-                          onPressed: _handleLogin,
+                          onPressed: _isLoading ? null : _handleLogin,
                           style: ElevatedButton.styleFrom(
                             backgroundColor: const Color(0xFF338CA8),
                             elevation: 3,
@@ -337,14 +348,23 @@ class _LoginPageState extends State<LoginPage> {
                               borderRadius: BorderRadius.circular(30),
                             ),
                           ),
-                          child: Text(
-                            'Log In',
-                            style: GoogleFonts.poppins(
-                              fontSize: 16,
-                              fontWeight: FontWeight.w600,
-                              color: Colors.white,
-                            ),
-                          ),
+                          child: _isLoading
+                              ? const SizedBox(
+                                  width: 22,
+                                  height: 22,
+                                  child: CircularProgressIndicator(
+                                    color: Colors.white,
+                                    strokeWidth: 2.5,
+                                  ),
+                                )
+                              : Text(
+                                  'Log In',
+                                  style: GoogleFonts.poppins(
+                                    fontSize: 16,
+                                    fontWeight: FontWeight.w600,
+                                    color: Colors.white,
+                                  ),
+                                ),
                         ),
                       ),
                       const SizedBox(height: 24),

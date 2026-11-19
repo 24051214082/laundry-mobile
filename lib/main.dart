@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'admin_chat_list_page.dart';
 import 'admin_chat_room_page.dart';
@@ -23,9 +24,15 @@ import 'admin_profile_page.dart';
 import 'manage_orders_page.dart';
 import 'payment_page.dart';
 
-void main() {
+Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  runApp(const MyApp());
+
+  await Supabase.initialize(
+    url: 'https://hhtmqpoitzeyigjszaqb.supabase.co',
+    anonKey: 'sb_publishable_xsSzM1ePCrevVp-QcAH2NA_Ukysdyun',
+  );
+
+  runApp(const MyApp()); // biarkan sesuai nama root widget di main.dart kalian
 }
 
 class MyApp extends StatelessWidget {
