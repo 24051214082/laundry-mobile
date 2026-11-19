@@ -1,6 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'payment_page.dart';
+import 'user_profile_store.dart';
+import 'user_session.dart';
 
 class _C {
   static const headerBlue = Color(0xFFD6EFFB);
@@ -103,6 +106,51 @@ class _OrderConfirmationPageState extends State<OrderConfirmationPage> {
     return int.tryParse(digitsOnly) ?? 0;
   }
 
+  String _formatRupiah(int value) {
+    final s = value.toString();
+    final buf = StringBuffer();
+    for (var i = 0; i < s.length; i++) {
+      if (i > 0 && (s.length - i) % 3 == 0) buf.write('.');
+      buf.write(s[i]);
+    }
+    return 'Rp $buf';
+  }
+
+  String _resolveCustomerName(User? currentUser) {
+    final sessionName = UserSession.name?.trim();
+    if (sessionName != null && sessionName.isNotEmpty) {
+      return sessionName;
+    }
+
+    final storeName = UserProfileStore.instance.name.trim();
+    if (storeName.isNotEmpty) {
+      return storeName;
+    }
+
+    final metaName = (currentUser?.userMetadata?['full_name'] ??
+        currentUser?.userMetadata?['name'])
+        ?.toString()
+        .trim();
+    if (metaName != null && metaName.isNotEmpty) {
+      return metaName;
+    }
+
+    final email = currentUser?.email?.trim();
+    if (email != null && email.isNotEmpty) {
+      return email;
+    }
+
+    return 'Pelanggan';
+  }
+
+  String? _resolveUserId(User? currentUser) {
+    final sessionUid = UserSession.userId?.trim();
+    if (sessionUid != null && sessionUid.isNotEmpty) {
+      return sessionUid;
+    }
+    return currentUser?.id;
+  }
+
   Future<String> _generateNextOrderCode(SupabaseClient client) async {
     try {
       final rows = await client.from('orders').select('order_code');
@@ -141,11 +189,8 @@ class _OrderConfirmationPageState extends State<OrderConfirmationPage> {
           ? summary.estimatedTotal
           : _parseRupiahToInt(summary.subtotal);
 
-      final customerName = (currentUser?.userMetadata?['full_name'] ??
-          currentUser?.userMetadata?['name'] ??
-          currentUser?.email ??
-          'Pelanggan')
-          .toString();
+      final customerName = _resolveCustomerName(currentUser);
+      final resolvedUid = _resolveUserId(currentUser);
 
       final payload = <String, dynamic>{
         'order_code': orderCode,
@@ -166,8 +211,8 @@ class _OrderConfirmationPageState extends State<OrderConfirmationPage> {
         'payment_status': 'Belum Lunas',
       };
 
-      if (currentUser != null) {
-        payload['user_id'] = currentUser.id;
+      if (resolvedUid != null && resolvedUid.isNotEmpty) {
+        payload['user_id'] = resolvedUid;
       }
 
       await client.from('orders').insert(payload);
@@ -181,6 +226,20 @@ class _OrderConfirmationPageState extends State<OrderConfirmationPage> {
           ),
         ),
       );
+
+      await Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (_) => PaymentPage(
+            orderId: orderCode,
+            serviceName: summary.jenisLaundry,
+            totalAmount: _formatRupiah(totalPrice),
+            isPaid: false,
+          ),
+        ),
+      );
+
+      if (!mounted) return;
       Navigator.pushNamedAndRemoveUntil(
         context,
         '/home',
@@ -268,6 +327,10 @@ class _OrderConfirmationPageState extends State<OrderConfirmationPage> {
 
   // ---- Detail pesanan -----------------------------------------------------
   Widget _buildDetailSection(OrderSummary s) {
+    final previewCustomer = _resolveCustomerName(
+      Supabase.instance.client.auth.currentUser,
+    );
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -295,6 +358,7 @@ class _OrderConfirmationPageState extends State<OrderConfirmationPage> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
+              _DetailRow('Nama Pelanggan', previewCustomer),
               _DetailRow('Jenis Laundry', s.jenisLaundry),
               _DetailRow('Kecepatan Layanan', s.kecepatan),
               _DetailRow('Pengerjaan', _normalizeTreatment(s.pengerjaan)),
