@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 
 import 'admin_bottom_nav.dart'; // sesuaikan path folder
+import 'user_session.dart';
 
 class AdminHomePage extends StatelessWidget {
   const AdminHomePage({super.key});
@@ -63,6 +64,10 @@ class AdminHomePage extends StatelessWidget {
 
   // ---------------------------------------------------------------- HEADER
   Widget _buildHeader(BuildContext context) {
+    final adminName = (UserSession.name != null && UserSession.name!.isNotEmpty)
+        ? UserSession.name!
+        : 'Admin';
+
     return Row(
       children: [
         Expanded(
@@ -77,7 +82,7 @@ class AdminHomePage extends StatelessWidget {
                 ),
               ),
               Text(
-                'Admin Nency',
+                adminName,
                 style: GoogleFonts.poppins(
                   fontSize: 24,
                   fontWeight: FontWeight.w800,

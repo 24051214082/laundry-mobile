@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 import 'app_bottom_nav.dart';
 import 'user_profile_store.dart';
 import 'user_session.dart';
@@ -24,7 +25,6 @@ class ProfilePage extends StatefulWidget {
 
 class _ProfilePageState extends State<ProfilePage> {
   final _formKey = GlobalKey<FormState>();
-
   final _store = UserProfileStore.instance;
 
   late final TextEditingController _nameC;
@@ -32,20 +32,83 @@ class _ProfilePageState extends State<ProfilePage> {
   late final TextEditingController _emailC;
   late final TextEditingController _addressC;
 
+  late String _savedName;
+  late String _savedPhone;
+  late String _savedEmail;
+  late String _savedAddress;
+
   bool _isDirty = false;
   bool _isSaving = false;
 
   @override
   void initState() {
     super.initState();
-    _nameC = TextEditingController(text: _store.name);
-    _phoneC = TextEditingController(text: _store.phone);
-    _emailC = TextEditingController(text: _store.email);
-    _addressC = TextEditingController(text: _store.address);
+    _savedName = (UserSession.name != null && UserSession.name!.isNotEmpty)
+        ? UserSession.name!
+        : _store.name;
+    _savedPhone = (UserSession.phone != null && UserSession.phone!.isNotEmpty)
+        ? UserSession.phone!
+        : _store.phone;
+    _savedEmail = (UserSession.email != null && UserSession.email!.isNotEmpty)
+        ? UserSession.email!
+        : _store.email;
+    _savedAddress =
+        (UserSession.address != null && UserSession.address!.isNotEmpty)
+            ? UserSession.address!
+            : _store.address;
+
+    _store.update(
+      name: _savedName,
+      phone: _savedPhone,
+      email: _savedEmail,
+      address: _savedAddress,
+    );
+
+    _nameC = TextEditingController(text: _savedName);
+    _phoneC = TextEditingController(text: _savedPhone);
+    _emailC = TextEditingController(text: _savedEmail);
+    _addressC = TextEditingController(text: _savedAddress);
 
     for (final c in [_nameC, _phoneC, _emailC, _addressC]) {
       c.addListener(_checkDirty);
     }
+
+    _fetchLatestProfile();
+  }
+
+  Future<void> _fetchLatestProfile() async {
+    final uid = UserSession.userId;
+    if (uid == null || uid.isEmpty) return;
+
+    try {
+      final data = await Supabase.instance.client
+          .from('users')
+          .select()
+          .eq('id', uid)
+          .maybeSingle();
+
+      if (!mounted || data == null) return;
+      await UserSession.setUser(data);
+
+      _savedName = UserSession.name ?? _savedName;
+      _savedPhone = UserSession.phone ?? _savedPhone;
+      _savedEmail = UserSession.email ?? _savedEmail;
+      _savedAddress = UserSession.address ?? _savedAddress;
+
+      _store.update(
+        name: _savedName,
+        phone: _savedPhone,
+        email: _savedEmail,
+        address: _savedAddress,
+      );
+
+      _nameC.text = _savedName;
+      _phoneC.text = _savedPhone;
+      _emailC.text = _savedEmail;
+      _addressC.text = _savedAddress;
+
+      setState(() => _isDirty = false);
+    } catch (_) {}
   }
 
   @override
@@ -58,10 +121,10 @@ class _ProfilePageState extends State<ProfilePage> {
   }
 
   void _checkDirty() {
-    final dirty = _nameC.text.trim() != _store.name ||
-        _phoneC.text.trim() != _store.phone ||
-        _emailC.text.trim() != _store.email ||
-        _addressC.text.trim() != _store.address;
+    final dirty = _nameC.text.trim() != _savedName ||
+        _phoneC.text.trim() != _savedPhone ||
+        _emailC.text.trim() != _savedEmail ||
+        _addressC.text.trim() != _savedAddress;
     if (dirty != _isDirty) setState(() => _isDirty = dirty);
   }
 
@@ -71,31 +134,71 @@ class _ProfilePageState extends State<ProfilePage> {
 
     setState(() => _isSaving = true);
 
-    await Future.delayed(const Duration(milliseconds: 600));
+    final newName = _nameC.text.trim();
+    final newPhone = _phoneC.text.trim();
+    final newEmail = _emailC.text.trim().toLowerCase();
+    final newAddress = _addressC.text.trim();
+    final uid = UserSession.userId;
 
-    if (!mounted) return;
-    _store.update(
-      name: _nameC.text.trim(),
-      phone: _phoneC.text.trim(),
-      email: _emailC.text.trim(),
-      address: _addressC.text.trim(),
-    );
-    setState(() {
-      _isSaving = false;
-      _isDirty = false;
-    });
+    try {
+      if (uid != null && uid.isNotEmpty) {
+        final updated = await Supabase.instance.client
+            .from('users')
+            .update({
+              'name': newName,
+              'phone': newPhone,
+              'email': newEmail,
+              'address': newAddress,
+            })
+            .eq('id', uid)
+            .select()
+            .single();
 
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        behavior: SnackBarBehavior.floating,
-        backgroundColor: _C.navy,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-        content: Text(
-          'Profil berhasil diperbarui',
-          style: GoogleFonts.poppins(fontSize: 12.5, color: Colors.white),
+        await UserSession.setUser(updated);
+      }
+
+      if (!mounted) return;
+      _savedName = newName;
+      _savedPhone = newPhone;
+      _savedEmail = newEmail;
+      _savedAddress = newAddress;
+
+      _store.update(
+        name: newName,
+        phone: newPhone,
+        email: newEmail,
+        address: newAddress,
+      );
+
+      setState(() => _isDirty = false);
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          behavior: SnackBarBehavior.floating,
+          backgroundColor: _C.navy,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+          content: Text(
+            'Profil berhasil diperbarui',
+            style: GoogleFonts.poppins(fontSize: 12.5, color: Colors.white),
+          ),
         ),
-      ),
-    );
+      );
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          behavior: SnackBarBehavior.floating,
+          backgroundColor: _C.danger,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+          content: Text(
+            'Gagal menyimpan profil: $e',
+            style: GoogleFonts.poppins(fontSize: 12, color: Colors.white),
+          ),
+        ),
+      );
+    } finally {
+      if (mounted) setState(() => _isSaving = false);
+    }
   }
 
   void _showLogoutConfirmation(BuildContext context) {
@@ -219,7 +322,6 @@ class _ProfilePageState extends State<ProfilePage> {
           bottom: false,
           child: Column(
             children: [
-              // ==================== Header Title ====================
               Padding(
                 padding: const EdgeInsets.fromLTRB(22, 16, 22, 18),
                 child: Align(
@@ -248,8 +350,6 @@ class _ProfilePageState extends State<ProfilePage> {
                   ),
                 ),
               ),
-
-              // ==================== Konten Lembar Putih ====================
               Expanded(
                 child: Container(
                   width: double.infinity,
@@ -269,7 +369,6 @@ class _ProfilePageState extends State<ProfilePage> {
                         children: [
                           _buildAvatar(),
                           const SizedBox(height: 24),
-
                           _buildSectionHeader('Informasi Pribadi'),
                           const SizedBox(height: 12),
                           _buildField(
@@ -333,7 +432,6 @@ class _ProfilePageState extends State<ProfilePage> {
                             },
                           ),
                           const SizedBox(height: 22),
-
                           _buildSectionHeader('Alamat Utama'),
                           const SizedBox(height: 12),
                           _buildField(
@@ -356,7 +454,6 @@ class _ProfilePageState extends State<ProfilePage> {
                             },
                           ),
                           const SizedBox(height: 28),
-
                           _buildSaveButton(),
                           const SizedBox(height: 12),
                           _buildLogoutButton(),
@@ -411,7 +508,7 @@ class _ProfilePageState extends State<ProfilePage> {
           children: [
             Flexible(
               child: Text(
-                _store.name,
+                _savedName,
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
                 style: GoogleFonts.poppins(

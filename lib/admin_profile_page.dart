@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 
 import 'admin_bottom_nav.dart';
 import 'user_session.dart';
@@ -19,31 +20,83 @@ class _AdminProfilePageState extends State<AdminProfilePage> {
 
   final _formKey = GlobalKey<FormState>();
 
-  final _nameC = TextEditingController(text: 'Admin Nency');
-  final _phoneC = TextEditingController(text: '+62 812-3456-7890');
-  final _emailC = TextEditingController(text: 'nency@wishyouwashhere.com');
+  late final TextEditingController _nameC;
+  late final TextEditingController _phoneC;
+  late final TextEditingController _emailC;
   final _outletC = TextEditingController(text: 'Wish You Wash Here');
-  final _addressC =
-      TextEditingController(text: 'Jl. Raya Darmo No. 12, Surabaya');
+  late final TextEditingController _addressC;
 
   late String _savedName;
+  late String _savedPhone;
   late String _savedEmail;
   late String _savedOutlet;
   late String _savedAddress;
 
   bool _hasChanges = false;
+  bool _isSaving = false;
 
   @override
   void initState() {
     super.initState();
+    _nameC = TextEditingController(
+      text: (UserSession.name != null && UserSession.name!.isNotEmpty)
+          ? UserSession.name!
+          : 'Admin Nency',
+    );
+    _phoneC = TextEditingController(
+      text: (UserSession.phone != null && UserSession.phone!.isNotEmpty)
+          ? UserSession.phone!
+          : '+62 812-3456-7890',
+    );
+    _emailC = TextEditingController(
+      text: (UserSession.email != null && UserSession.email!.isNotEmpty)
+          ? UserSession.email!
+          : 'admin@wishyouwash.com',
+    );
+    _addressC = TextEditingController(
+      text: (UserSession.address != null && UserSession.address!.isNotEmpty)
+          ? UserSession.address!
+          : 'Jl. Ketintang Baru No. 12, Surabaya',
+    );
+
+    _syncSaved();
+
+    for (final c in [_nameC, _phoneC, _emailC, _outletC, _addressC]) {
+      c.addListener(_checkChanges);
+    }
+
+    _fetchLatestAdmin();
+  }
+
+  void _syncSaved() {
     _savedName = _nameC.text;
+    _savedPhone = _phoneC.text;
     _savedEmail = _emailC.text;
     _savedOutlet = _outletC.text;
     _savedAddress = _addressC.text;
+  }
 
-    for (final c in [_nameC, _emailC, _outletC, _addressC]) {
-      c.addListener(_checkChanges);
-    }
+  Future<void> _fetchLatestAdmin() async {
+    final uid = UserSession.userId;
+    if (uid == null || uid.isEmpty) return;
+
+    try {
+      final data = await Supabase.instance.client
+          .from('users')
+          .select()
+          .eq('id', uid)
+          .maybeSingle();
+
+      if (!mounted || data == null) return;
+      await UserSession.setUser(data);
+
+      _nameC.text = UserSession.name ?? _nameC.text;
+      _phoneC.text = UserSession.phone ?? _phoneC.text;
+      _emailC.text = UserSession.email ?? _emailC.text;
+      _addressC.text = UserSession.address ?? _addressC.text;
+      _syncSaved();
+      setState(() => _hasChanges = false);
+    } catch (_) {}
   }
 
   @override
@@ -58,6 +111,7 @@ class _AdminProfilePageState extends State<AdminProfilePage> {
 
   void _checkChanges() {
     final changed = _nameC.text != _savedName ||
+        _phoneC.text != _savedPhone ||
         _emailC.text != _savedEmail ||
         _outletC.text != _savedOutlet ||
         _addressC.text != _savedAddress;
@@ -66,25 +120,59 @@ class _AdminProfilePageState extends State<AdminProfilePage> {
     }
   }
 
-  void _save() {
+  Future<void> _save() async {
     if (!_formKey.currentState!.validate()) return;
     FocusScope.of(context).unfocus();
 
-    setState(() {
-      _savedName = _nameC.text;
-      _savedEmail = _emailC.text;
-      _savedOutlet = _outletC.text;
-      _savedAddress = _addressC.text;
-      _hasChanges = false;
-    });
+    setState(() => _isSaving = true);
 
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text('Profil berhasil diperbarui',
-            style: GoogleFonts.poppins(fontSize: 12.5)),
-        behavior: SnackBarBehavior.floating,
-      ),
-    );
+    final newName = _nameC.text.trim();
+    final newPhone = _phoneC.text.trim();
+    final newEmail = _emailC.text.trim().toLowerCase();
+    final newAddress = _addressC.text.trim();
+    final uid = UserSession.userId;
+
+    try {
+      if (uid != null && uid.isNotEmpty) {
+        final updated = await Supabase.instance.client
+            .from('users')
+            .update({
+              'name': newName,
+              'phone': newPhone,
+              'email': newEmail,
+              'address': newAddress,
+            })
+            .eq('id', uid)
+            .select()
+            .single();
+
+        await UserSession.setUser(updated);
+      }
+
+      if (!mounted) return;
+      _syncSaved();
+      setState(() => _hasChanges = false);
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Profil berhasil diperbarui',
+              style: GoogleFonts.poppins(fontSize: 12.5)),
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          backgroundColor: const Color(0xFFEF4444),
+          content: Text('Gagal memperbarui profil: $e',
+              style: GoogleFonts.poppins(fontSize: 12, color: Colors.white)),
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+    } finally {
+      if (mounted) setState(() => _isSaving = false);
+    }
   }
 
   @override
@@ -95,7 +183,6 @@ class _AdminProfilePageState extends State<AdminProfilePage> {
         bottom: false,
         child: Column(
           children: [
-            // Header
             Padding(
               padding: const EdgeInsets.fromLTRB(20, 16, 20, 16),
               child: Align(
@@ -122,8 +209,6 @@ class _AdminProfilePageState extends State<AdminProfilePage> {
                 ),
               ),
             ),
-
-            // Konten
             Expanded(
               child: Container(
                 width: double.infinity,
@@ -140,7 +225,6 @@ class _AdminProfilePageState extends State<AdminProfilePage> {
                       children: [
                         _buildAvatarSection(),
                         const SizedBox(height: 24),
-
                         _sectionTitle('Informasi Pribadi'),
                         const SizedBox(height: 10),
                         _field(
@@ -155,7 +239,7 @@ class _AdminProfilePageState extends State<AdminProfilePage> {
                           label: 'Nomor HP',
                           icon: Icons.phone_outlined,
                           controller: _phoneC,
-                          readOnly: true,
+                          keyboardType: TextInputType.phone,
                         ),
                         _field(
                           label: 'Email',
@@ -172,7 +256,6 @@ class _AdminProfilePageState extends State<AdminProfilePage> {
                             return null;
                           },
                         ),
-
                         const SizedBox(height: 8),
                         _sectionTitle('Informasi Outlet'),
                         const SizedBox(height: 10),
@@ -193,7 +276,6 @@ class _AdminProfilePageState extends State<AdminProfilePage> {
                               ? 'Alamat tidak boleh kosong'
                               : null,
                         ),
-
                         const SizedBox(height: 8),
                         _buildSaveButton(),
                         const SizedBox(height: 12),
@@ -356,7 +438,7 @@ class _AdminProfilePageState extends State<AdminProfilePage> {
       width: double.infinity,
       height: 52,
       child: ElevatedButton(
-        onPressed: _hasChanges ? _save : null,
+        onPressed: (_hasChanges && !_isSaving) ? _save : null,
         style: ElevatedButton.styleFrom(
           backgroundColor: _accent,
           foregroundColor: Colors.white,
@@ -367,13 +449,22 @@ class _AdminProfilePageState extends State<AdminProfilePage> {
             borderRadius: BorderRadius.circular(16),
           ),
         ),
-        child: Text(
-          'Simpan Perubahan',
-          style: GoogleFonts.poppins(
-            fontSize: 14,
-            fontWeight: FontWeight.w600,
-          ),
-        ),
+        child: _isSaving
+            ? const SizedBox(
+                width: 20,
+                height: 20,
+                child: CircularProgressIndicator(
+                  strokeWidth: 2.2,
+                  color: Colors.white,
+                ),
+              )
+            : Text(
+                'Simpan Perubahan',
+                style: GoogleFonts.poppins(
+                  fontSize: 14,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
       ),
     );
   }
