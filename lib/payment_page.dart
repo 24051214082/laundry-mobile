@@ -689,4 +689,4 @@ class _QrisMockPainter extends CustomPainter {
 
   @override
   bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
-}gi
+}
