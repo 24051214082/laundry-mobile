@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'user_session.dart';
 
 class SignUpPage extends StatefulWidget {
   const SignUpPage({super.key});
@@ -116,13 +117,15 @@ class _SignUpPageState extends State<SignUpPage> {
       }
 
       // Simpan akun baru ke tabel users di Supabase
-      await supabase.from('users').insert({
+      final newUser = await supabase.from('users').insert({
         'name': nama,
         'email': email,
         'password_hash': password,
         'phone': telepon,
         'role': 'customer',
-      });
+      }).select().single();
+
+      await UserSession.setUser(newUser);
 
       if (!mounted) return;
 

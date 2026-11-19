@@ -23,6 +23,7 @@ import 'rekapitulasi_transaksi.dart';
 import 'admin_profile_page.dart';
 import 'manage_orders_page.dart';
 import 'payment_page.dart';
+import 'user_session.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -32,11 +33,17 @@ Future<void> main() async {
     anonKey: 'sb_publishable_xsSzM1ePCrevVp-QcAH2NA_Ukysdyun',
   );
 
-  runApp(const MyApp()); // biarkan sesuai nama root widget di main.dart kalian
+  final bool isLoggedIn = await UserSession.loadFromPrefs();
+  final String startRoute = !isLoggedIn
+      ? '/login'
+      : (UserSession.role == 'admin' ? '/admin-home' : '/home');
+
+  runApp(MyApp(initialRoute: startRoute));
 }
 
 class MyApp extends StatelessWidget {
-  const MyApp({super.key});
+  final String initialRoute;
+  const MyApp({super.key, required this.initialRoute});
 
   @override
   Widget build(BuildContext context) {
@@ -54,7 +61,7 @@ class MyApp extends StatelessWidget {
           primary: const Color(0xFF338CA8),
         ),
       ),
-      initialRoute: '/login',
+      initialRoute: initialRoute,
       routes: {
         '/login': (context) => const LoginPage(),
         '/signup': (context) => const SignUpPage(),

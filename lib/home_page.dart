@@ -3,6 +3,8 @@ import 'package:google_fonts/google_fonts.dart';
 import 'app_bottom_nav.dart';
 import 'status_pesanan.dart';
 import 'user_profile_store.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
+import 'user_session.dart';
 
 class HomePage extends StatefulWidget {
   const HomePage({super.key});
@@ -12,28 +14,85 @@ class HomePage extends StatefulWidget {
 }
 
 class _HomePageState extends State<HomePage> {
-  Map<String, dynamic> activeOrderData = {
-    'orderId': '#LKN4wa123',
-    'serviceName': 'Laundry Kiloan',
-    'weight': '5.0 kg',
-    'treatment': 'Cuci + Setrika',
-    'perfume': 'Ocean Fresh',
-    'detergent': 'Anti Bakteri',
-    'method': 'Antar Jemput Driver',
-    'address': 'Jl. Ketintang Baru No. 12, Surabaya',
-    'totalPrice': 'Rp 35.000',
-    'status': 'Diproses',
-    'estimate': '18 April 2027, 08.00',
-    'image': 'assets/laundrykiloan.PNG',
-  };
+  Map<String, dynamic>? activeOrderData;
+    bool _isLoadingOrder = true;
+
+    @override
+    void initState() {
+      super.initState();
+      _fetchActiveOrder();
+    }
+
+    Future<void> _fetchActiveOrder() async {
+      setState(() => _isLoadingOrder = true);
+      try {
+        var query = Supabase.instance.client
+            .from('orders')
+            .select()
+            .neq('status', 'Selesai')
+            .neq('status', 'Dibatalkan');
+
+        if (UserSession.userId != null && UserSession.userId!.isNotEmpty) {
+          query = query.eq('user_id', UserSession.userId!);
+        }
+
+        final row = await query
+            .order('created_at', ascending: false)
+            .limit(1)
+            .maybeSingle();
+
+        if (!mounted) return;
+
+        if (row == null) {
+          setState(() {
+            activeOrderData = null;
+            _isLoadingOrder = false;
+          });
+          return;
+        }
+
+        final serviceName = (row['service_name'] ?? 'Laundry').toString();
+        final lower = serviceName.toLowerCase();
+        String assetImg = 'assets/laundrysatuan2.png';
+        if (lower.contains('kiloan')) {
+          assetImg = 'assets/laundrykiloan.PNG';
+        } else if (lower.contains('bed cover')) {
+          assetImg = 'assets/laundrybedcover.PNG';
+        } else if (lower.contains('boneka')) {
+          assetImg = 'assets/laundryboneka.PNG';
+        }
+
+        setState(() {
+          activeOrderData = {
+            'dbId': row['id'].toString(),
+            'orderId': (row['order_code'] ?? '-').toString(),
+            'serviceName': serviceName,
+            'weight': (row['weight_or_qty'] ?? '-').toString(),
+            'treatment': (row['treatment'] ?? '-').toString(),
+            'perfume': (row['perfume_name'] ?? '-').toString(),
+            'detergent': (row['detergent_name'] ?? '-').toString(),
+            'method': '${row['pickup_method'] ?? '-'} • ${row['delivery_method'] ?? '-'}',
+            'address': (row['address'] ?? '-').toString(),
+            'totalPrice': 'Rp ${row['total_price'] ?? 0}',
+            'status': (row['status'] ?? 'Diproses').toString(),
+            'estimate': (row['pickup_schedule'] ?? '-').toString(),
+            'image': assetImg,
+          };
+          _isLoadingOrder = false;
+        });
+      } catch (_) {
+        if (mounted) setState(() => _isLoadingOrder = false);
+      }
+    }
 
   void _navigateToStatusPesanan() {
-    Navigator.pushNamed(
-      context,
-      '/status-pesanan',
-      arguments: activeOrderData,
-    );
-  }
+      if (activeOrderData == null) return;
+      Navigator.pushNamed(
+        context,
+        '/status-pesanan',
+        arguments: activeOrderData,
+      ).then((_) => _fetchActiveOrder());
+    }
 
   void _navigateToBooking(String serviceName) {
     Navigator.pushNamed(
@@ -221,7 +280,7 @@ class _HomePageState extends State<HomePage> {
                               borderRadius: BorderRadius.circular(20),
                             ),
                             child: Image.asset(
-                              activeOrderData['image'] ??
+                              activeOrderData?['image'] ??
                                   'assets/laundrykiloan.PNG',
                               fit: BoxFit.contain,
                               errorBuilder: (context, error, stackTrace) =>
@@ -259,7 +318,7 @@ class _HomePageState extends State<HomePage> {
                                         borderRadius: BorderRadius.circular(8),
                                       ),
                                       child: Text(
-                                        activeOrderData['status'] ?? 'Diproses',
+                                        activeOrderData?['status'] ?? 'Diproses',
                                         style: GoogleFonts.poppins(
                                           fontSize: 10.5,
                                           fontWeight: FontWeight.w600,
@@ -270,7 +329,7 @@ class _HomePageState extends State<HomePage> {
                                   ],
                                 ),
                                 Text(
-                                  activeOrderData['orderId'] ?? '-',
+                                  activeOrderData?['orderId'] ?? '-',
                                   style: GoogleFonts.poppins(
                                     fontSize: 11,
                                     color: const Color(0xFF64748B),
@@ -278,12 +337,11 @@ class _HomePageState extends State<HomePage> {
                                 ),
                                 const SizedBox(height: 5),
                                 Text(
-                                  '${activeOrderData['serviceName']} ${activeOrderData['weight']}',
+                                  '${activeOrderData?['serviceName']} ${activeOrderData?['weight']}',
                                   style: GoogleFonts.poppins(
                                     fontSize: 13,
                                     fontWeight: FontWeight.w700,
-                                    color: const Color(0xFF1E293B),
-                                  ),
+                                    color: const Color(0xFF1E293B),                                ),
                                 ),
                                 const SizedBox(height: 2),
                                 Text(
@@ -294,7 +352,7 @@ class _HomePageState extends State<HomePage> {
                                   ),
                                 ),
                                 Text(
-                                  activeOrderData['estimate'] ?? '-',
+                                  activeOrderData?['estimate'] ?? '-',
                                   style: GoogleFonts.poppins(
                                     fontSize: 11.5,
                                     fontWeight: FontWeight.w600,

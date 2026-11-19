@@ -1,14 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 import 'app_bottom_nav.dart';
 import 'order_confirmation_page.dart';
 import 'order_detail_page.dart';
-
-// ---------------------------------------------------------------------------
-// Halaman Riwayat Pesanan
-// Letakkan di: lib/order_history_page.dart
-// Footer memakai widget bersama AppBottomNav (lib/app_bottom_nav.dart).
-// ---------------------------------------------------------------------------
+import 'user_session.dart';
 
 class _AppColors {
   static const headerBlue = Color(0xFFD6EFFB);
@@ -30,8 +26,9 @@ class OrderItem {
   final String service;
   final String quantity;
   final String total;
+  final String rawStatus;
   final OrderStatus status;
-  final OrderSummary? summary; // rincian untuk halaman Detail Pesanan
+  final OrderSummary? summary;
 
   const OrderItem({
     required this.id,
@@ -39,9 +36,98 @@ class OrderItem {
     required this.service,
     required this.quantity,
     required this.total,
+    required this.rawStatus,
     required this.status,
     this.summary,
   });
+
+  factory OrderItem.fromMap(Map<String, dynamic> map) {
+    final String orderCode = (map['order_code'] ?? '-').toString();
+    final String serviceName = (map['service_name'] ?? 'Laundry').toString();
+    final String speed = (map['speed'] ?? 'Reguler').toString();
+    final String treatment = (map['treatment'] ?? 'Cuci Saja').toString();
+    final String detergent =
+        (map['detergent_name'] ?? 'Standar / Bawa Sendiri').toString();
+    final String perfume =
+        (map['perfume_name'] ?? 'Standar / Bawa Sendiri').toString();
+    final String pickup = (map['pickup_method'] ?? 'Antar Sendiri').toString();
+    final String delivery =
+        (map['delivery_method'] ?? 'Ambil Sendiri').toString();
+    final String schedule = (map['pickup_schedule'] ?? '-').toString();
+    final String address = (map['address'] ?? '-').toString();
+    final String weightOrQty = (map['weight_or_qty'] ?? '-').toString();
+    final String rawStatus = (map['status'] ?? 'Penjemputan').toString();
+
+    final int totalInt = (map['total_price'] is num)
+        ? (map['total_price'] as num).toInt()
+        : int.tryParse((map['total_price'] ?? '0').toString()) ?? 0;
+
+    final String formattedTotal = _formatRupiah(totalInt);
+
+    String formattedDate = '-';
+    if (map['created_at'] != null) {
+      final dt = DateTime.tryParse(map['created_at'].toString())?.toLocal();
+      if (dt != null) {
+        final day = dt.day.toString().padLeft(2, '0');
+        final month = dt.month.toString().padLeft(2, '0');
+        final hour = dt.hour.toString().padLeft(2, '0');
+        final minute = dt.minute.toString().padLeft(2, '0');
+        formattedDate = '$day/$month/${dt.year}, $hour.$minute WIB';
+      }
+    }
+
+    final lowerStatus = rawStatus.toLowerCase();
+    OrderStatus mappedStatus;
+    if (lowerStatus.contains('batal')) {
+      mappedStatus = OrderStatus.dibatalkan;
+    } else if (lowerStatus == 'selesai') {
+      mappedStatus = OrderStatus.selesai;
+    } else if (lowerStatus == 'pengantaran' ||
+        lowerStatus == 'menunggu pengambilan') {
+      mappedStatus = OrderStatus.pengantaran;
+    } else {
+      mappedStatus = OrderStatus.pencucian;
+    }
+
+    return OrderItem(
+      id: orderCode,
+      date: formattedDate,
+      service: '$serviceName - $speed',
+      quantity: weightOrQty,
+      total: formattedTotal,
+      rawStatus: rawStatus,
+      status: mappedStatus,
+      summary: OrderSummary(
+        jenisLaundry: serviceName,
+        kecepatan: speed,
+        pengerjaan: treatment,
+        deterjen: detergent,
+        pewangi: perfume,
+        metode: '$pickup • $delivery',
+        jadwal: schedule,
+        alamat: address,
+        biaya: [
+          CostItem('Layanan ($serviceName)', formattedTotal),
+          if (weightOrQty != '-') CostItem('Berat / Jumlah', weightOrQty),
+        ],
+        subtotal: formattedTotal,
+      ),
+    );
+  }
+
+  static String _formatRupiah(int amount) {
+    final str = amount.toString();
+    final buffer = StringBuffer();
+    int count = 0;
+    for (int i = str.length - 1; i >= 0; i--) {
+      buffer.write(str[i]);
+      count++;
+      if (count % 3 == 0 && i != 0) {
+        buffer.write('.');
+      }
+    }
+    return 'Rp${buffer.toString().split('').reversed.join()}';
+  }
 }
 
 class OrderHistoryPage extends StatefulWidget {
@@ -59,107 +145,53 @@ class _OrderHistoryPageState extends State<OrderHistoryPage> {
     'Dibatalkan',
   ];
 
-  // Data dummy, nanti bisa diganti dengan data dari API / database.
-  final List<OrderItem> _orders = const [
-    OrderItem(
-      id: 'LKN4wa126',
-      date: 'xx/xx/xxxx, 00.00 WIB',
-      service: 'Laundry Boneka - Besar',
-      quantity: '1 Pc',
-      total: 'Rp2xxxx',
-      status: OrderStatus.dibatalkan,
-      summary: OrderSummary(
-        jenisLaundry: 'Satuan',
-        kecepatan: 'Reguler',
-        pengerjaan: 'Cuci saja',
-        deterjen: 'Tanpa deterjen',
-        pewangi: 'Tanpa pewangi',
-        metode: 'Antar Sendiri',
-        jadwal: '22 Oktober 2026 - 08.00',
-        alamat: 'xxxxxxx',
-        biaya: [
-          CostItem('Harga per barang', 'Dikonfirmasi admin'),
-        ],
-        subtotal: 'Rp2xxxx',
-      ),
-    ),
-    OrderItem(
-      id: 'LKN4wa125',
-      date: 'xx/xx/xxxx, 00.00 WIB',
-      service: 'Laundry Kiloan - Express',
-      quantity: '7 Kg',
-      total: 'Rp2xxxx',
-      status: OrderStatus.pengantaran,
-      summary: OrderSummary(
-        jenisLaundry: 'Kiloan',
-        kecepatan: 'Express',
-        pengerjaan: 'Cuci + Setrika',
-        deterjen: 'Deterjen A',
-        pewangi: 'Pewangi A',
-        metode: 'Penjemputan',
-        jadwal: '22 Oktober 2026 - 08.00',
-        alamat: 'xxxxxxx',
-        biaya: [
-          CostItem('Berat minimum', 'Rp20.000'),
-          CostItem('Berat Tambahan', 'Rp3.000'),
-          CostItem('Biaya Express', 'Rpxxxxxx'),
-          CostItem('Cuci + Setrika', 'Rpxxxxxx'),
-          CostItem('Tambahan Deterjen', 'Rp1.000'),
-          CostItem('Tambahan Pewangi', 'Rp1.000'),
-        ],
-        subtotal: 'Rp2xxxx',
-      ),
-    ),
-    OrderItem(
-      id: 'LKN4wa124',
-      date: 'xx/xx/xxxx, 00.00 WIB',
-      service: 'Laundry Bedcover - Kecil',
-      quantity: '2 Pcs',
-      total: 'Rp3xxxx',
-      status: OrderStatus.pencucian,
-      summary: OrderSummary(
-        jenisLaundry: 'Satuan',
-        kecepatan: 'Reguler',
-        pengerjaan: 'Cuci + Setrika',
-        deterjen: 'Deterjen B',
-        pewangi: 'Tanpa pewangi',
-        metode: 'Penjemputan',
-        jadwal: '22 Oktober 2026 - 08.00',
-        alamat: 'xxxxxxx',
-        biaya: [
-          CostItem('Harga per barang', 'Dikonfirmasi admin'),
-          CostItem('Cuci + Setrika', 'Rpxxxxxx'),
-          CostItem('Tambahan Deterjen', 'Rp1.000'),
-        ],
-        subtotal: 'Rp3xxxx',
-      ),
-    ),
-    OrderItem(
-      id: 'LKN4wa123',
-      date: 'xx/xx/xxxx, 00.00 WIB',
-      service: 'Laundry Satuan - Reguler',
-      quantity: '1 Pc',
-      total: 'Rp1xxxx',
-      status: OrderStatus.selesai,
-      summary: OrderSummary(
-        jenisLaundry: 'Satuan',
-        kecepatan: 'Reguler',
-        pengerjaan: 'Cuci saja',
-        deterjen: 'Tanpa deterjen',
-        pewangi: 'Tanpa pewangi',
-        metode: 'Antar Sendiri',
-        jadwal: '22 Oktober 2026 - 08.00',
-        alamat: 'xxxxxxx',
-        biaya: [
-          CostItem('Harga per barang', 'Dikonfirmasi admin'),
-        ],
-        subtotal: 'Rp1xxxx',
-      ),
-    ),
-  ];
+  final _supabase = Supabase.instance.client;
+  List<OrderItem> _orders = [];
+  bool _isLoading = true;
 
   int _selectedTab = 0;
   String _query = '';
+
+  @override
+  void initState() {
+    super.initState();
+    _fetchOrderHistory();
+  }
+
+  Future<void> _fetchOrderHistory() async {
+    setState(() => _isLoading = true);
+    try {
+      var queryBuilder = _supabase.from('orders').select();
+
+      // Filter berdasarkan user_id akun yang sedang login
+      if (UserSession.userId != null && UserSession.userId!.isNotEmpty) {
+        queryBuilder = queryBuilder.eq('user_id', UserSession.userId!);
+      }
+
+      final response = await queryBuilder.order('created_at', ascending: false);
+      final List<dynamic> dataList = response as List<dynamic>;
+
+      if (!mounted) return;
+      setState(() {
+        _orders = dataList
+            .map((row) => OrderItem.fromMap(row as Map<String, dynamic>))
+            .toList();
+        _isLoading = false;
+      });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _isLoading = false);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          backgroundColor: Colors.redAccent,
+          content: Text(
+            'Gagal memuat riwayat pesanan: $e',
+            style: GoogleFonts.poppins(fontSize: 12),
+          ),
+        ),
+      );
+    }
+  }
 
   List<OrderItem> get _filteredOrders {
     return _orders.where((o) {
@@ -184,27 +216,44 @@ class _OrderHistoryPageState extends State<OrderHistoryPage> {
       backgroundColor: _AppColors.background,
       bottomNavigationBar: const AppBottomNav(currentIndex: 2),
       body: Column(
-            children: [
-              _buildHeader(context),
-              Expanded(
-                child: orders.isEmpty
-                    ? Center(
-                        child: Text(
-                          'Pesanan tidak ditemukan',
-                          style: GoogleFonts.poppins(
-                            fontSize: 13,
-                            color: _AppColors.navy.withOpacity(0.6),
+        children: [
+          _buildHeader(context),
+          Expanded(
+            child: _isLoading
+                ? const Center(
+                    child: CircularProgressIndicator(color: _AppColors.primary),
+                  )
+                : RefreshIndicator(
+                    onRefresh: _fetchOrderHistory,
+                    color: _AppColors.primary,
+                    child: orders.isEmpty
+                        ? ListView(
+                            children: [
+                              SizedBox(
+                                height:
+                                    MediaQuery.of(context).size.height * 0.45,
+                                child: Center(
+                                  child: Text(
+                                    'Pesanan tidak ditemukan',
+                                    style: GoogleFonts.poppins(
+                                      fontSize: 13,
+                                      color: _AppColors.navy.withOpacity(0.6),
+                                    ),
+                                  ),
+                                ),
+                              ),
+                            ],
+                          )
+                        : ListView.separated(
+                            padding: const EdgeInsets.fromLTRB(16, 16, 16, 24),
+                            itemCount: orders.length,
+                            separatorBuilder: (_, __) =>
+                                const SizedBox(height: 14),
+                            itemBuilder: (_, i) => _OrderCard(order: orders[i]),
                           ),
-                        ),
-                      )
-                    : ListView.separated(
-                        padding: const EdgeInsets.fromLTRB(16, 16, 16, 24),
-                        itemCount: orders.length,
-                        separatorBuilder: (_, __) => const SizedBox(height: 14),
-                        itemBuilder: (_, i) => _OrderCard(order: orders[i]),
-                      ),
-              ),
-            ],
+                  ),
+          ),
+        ],
       ),
     );
   }
@@ -239,7 +288,6 @@ class _OrderHistoryPageState extends State<OrderHistoryPage> {
             ),
           ),
           const SizedBox(height: 14),
-          // Search bar
           Container(
             height: 40,
             decoration: BoxDecoration(
@@ -266,7 +314,6 @@ class _OrderHistoryPageState extends State<OrderHistoryPage> {
             ),
           ),
           const SizedBox(height: 14),
-          // Tab filter
           Container(
             padding: const EdgeInsets.all(5),
             decoration: BoxDecoration(
@@ -284,7 +331,8 @@ class _OrderHistoryPageState extends State<OrderHistoryPage> {
                       height: 40,
                       alignment: Alignment.center,
                       decoration: BoxDecoration(
-                        color: selected ? _AppColors.primary : Colors.transparent,
+                        color:
+                            selected ? _AppColors.primary : Colors.transparent,
                         borderRadius: BorderRadius.circular(12),
                         border: selected
                             ? Border.all(color: Colors.white, width: 1.5)
@@ -311,9 +359,6 @@ class _OrderHistoryPageState extends State<OrderHistoryPage> {
   }
 }
 
-// ---------------------------------------------------------------------------
-// Kartu pesanan
-// ---------------------------------------------------------------------------
 class _OrderCard extends StatelessWidget {
   final OrderItem order;
 
@@ -329,19 +374,6 @@ class _OrderCard extends StatelessWidget {
         return Icons.local_laundry_service_outlined;
       case OrderStatus.selesai:
         return Icons.check_circle_outline_rounded;
-    }
-  }
-
-  String get _label {
-    switch (order.status) {
-      case OrderStatus.dibatalkan:
-        return 'Dibatalkan';
-      case OrderStatus.pengantaran:
-        return 'Pengantaran';
-      case OrderStatus.pencucian:
-        return 'Pencucian';
-      case OrderStatus.selesai:
-        return 'Selesai';
     }
   }
 
@@ -374,7 +406,6 @@ class _OrderCard extends StatelessWidget {
       ),
       child: Column(
         children: [
-          // Baris atas: ikon, ID, tanggal, status
           Padding(
             padding: const EdgeInsets.fromLTRB(16, 14, 16, 10),
             child: Row(
@@ -411,7 +442,7 @@ class _OrderCard extends StatelessWidget {
                     borderRadius: BorderRadius.circular(20),
                   ),
                   child: Text(
-                    _label,
+                    order.rawStatus,
                     style: GoogleFonts.poppins(
                       fontSize: 11,
                       fontWeight: FontWeight.w500,
@@ -425,7 +456,6 @@ class _OrderCard extends StatelessWidget {
             ),
           ),
           const Divider(height: 1, thickness: 1, color: _AppColors.divider),
-          // Baris tengah: layanan & total
           Padding(
             padding: const EdgeInsets.fromLTRB(16, 10, 16, 10),
             child: Row(
@@ -489,7 +519,6 @@ class _OrderCard extends StatelessWidget {
             ),
           ),
           const Divider(height: 1, thickness: 1, color: _AppColors.divider),
-          // Tombol detail
           Padding(
             padding: const EdgeInsets.fromLTRB(16, 10, 16, 12),
             child: Align(

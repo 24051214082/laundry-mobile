@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'payment_page.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 
 class StatusPesananPage extends StatefulWidget {
   const StatusPesananPage({super.key});
@@ -14,35 +15,81 @@ class _StatusPesananPageState extends State<StatusPesananPage> {
 
   late Map<String, dynamic> _orderData;
 
+  Future<void> _fetchLatestOrder() async {
+    final String? dbId = _orderData['dbId']?.toString();
+    final String? orderCode = _orderData['orderId']?.toString();
+    if ((dbId == null || dbId.isEmpty) && (orderCode == null || orderCode.isEmpty)) return;
+
+    try {
+      var query = Supabase.instance.client.from('orders').select();
+      query = (dbId != null && dbId.isNotEmpty)
+          ? query.eq('id', dbId)
+          : query.eq('order_code', orderCode!);
+
+      final row = await query.maybeSingle();
+      if (row == null || !mounted) return;
+
+      setState(() {
+        _orderData['dbId'] = row['id'].toString();
+        _orderData['orderId'] = (row['order_code'] ?? '-').toString();
+        _orderData['serviceName'] = (row['service_name'] ?? '-').toString();
+        _orderData['weight'] = (row['weight_or_qty'] ?? '-').toString();
+        _orderData['treatment'] = (row['treatment'] ?? '-').toString();
+        _orderData['speed'] = (row['speed'] ?? '-').toString();
+        _orderData['totalPrice'] = 'Rp ${row['total_price'] ?? 0}';
+        _orderData['status'] = (row['status'] ?? '-').toString();
+        _orderData['estimate'] = (row['pickup_schedule'] ?? '-').toString();
+        _isPaid = (row['payment_status']?.toString().toLowerCase() == 'lunas');
+        _orderData['isPaid'] = _isPaid;
+      });
+    } catch (_) {}
+  }
+
+  int _getCurrentStepIndex(String status) {
+    switch (status) {
+      case 'Penjemputan':
+        return 2;
+      case 'Konfirmasi Harga':
+        return 3;
+      case 'Menunggu Pembayaran':
+        return 4;
+      case 'Waiting':
+        return 6;
+      case 'Pencucian':
+        return 7;
+      case 'Pengeringan':
+        return 8;
+      case 'Penyetrikaan':
+        return 9;
+      case 'Pengantaran':
+      case 'Menunggu Pengambilan':
+        return 10;
+      case 'Selesai':
+        return 11;
+      default:
+        return 1;
+    }
+  }
+
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
     if (!_isInit) {
       _orderData =
-          (ModalRoute.of(context)?.settings.arguments as Map<String, dynamic>?) ??
-              {
-                'orderId': '#LKN4wa123',
-                'serviceName': 'Laundry Kiloan',
-                'weight': '5.0 kg',
-                'treatment': 'Cuci + Setrika',
-                'totalPrice': 'Rp 35.000',
-                'status': 'Diproses',
-                'estimate': '18 April 2027, 08.00',
-                'isPaid': false,
-              };
+          (ModalRoute.of(context)?.settings.arguments as Map<String, dynamic>?) ?? {};
 
       _isPaid = _orderData['isPaid'] ?? false;
+      _fetchLatestOrder();
       _isInit = true;
     }
   }
 
   Future<void> _openPaymentPage() async {
-    final String orderId = _orderData['orderId'] ?? '#LKN4wa123';
-    final String serviceName = _orderData['serviceName'] ?? 'Laundry Kiloan';
-    final String weight = _orderData['weight'] ?? '5.0 kg';
-    final String totalAmount = _orderData['totalPrice'] ?? 'Rp 35.000';
+    final String orderId = _orderData['orderId'] ?? '-';
+    final String serviceName = _orderData['serviceName'] ?? '-';
+    final String weight = _orderData['weight'] ?? '-';
+    final String totalAmount = _orderData['totalPrice'] ?? 'Rp 0';
 
-    // Langsung navigasi ke PaymentPage sambil mengirim detail tagihan & status bayar
     final result = await Navigator.push(
       context,
       MaterialPageRoute(
@@ -55,8 +102,13 @@ class _StatusPesananPageState extends State<StatusPesananPage> {
       ),
     );
 
-    // Jika pelanggan menyelesaikan pembayaran di PaymentPage, update state halaman ini
     if (result is bool && result == true) {
+      if (_orderData['dbId'] != null) {
+        await Supabase.instance.client
+            .from('orders')
+            .update({'payment_status': 'Lunas'})
+            .eq('id', _orderData['dbId']);
+      }
       setState(() {
         _isPaid = true;
         _orderData['isPaid'] = true;
@@ -66,12 +118,14 @@ class _StatusPesananPageState extends State<StatusPesananPage> {
 
   @override
   Widget build(BuildContext context) {
-    final String orderId = _orderData['orderId'] ?? '#LKN4wa123';
-    final String serviceName = _orderData['serviceName'] ?? 'Laundry Kiloan';
-    final String weight = _orderData['weight'] ?? '5.0 kg';
-    final String treatment = _orderData['treatment'] ?? 'Cuci + Setrika';
-    final String totalAmount = _orderData['totalPrice'] ?? 'Rp 35.000';
-    final String status = _orderData['status'] ?? 'Diproses';
+    final String orderId = _orderData['orderId'] ?? '-';
+    final String serviceName = _orderData['serviceName'] ?? '-';
+    final String weight = _orderData['weight'] ?? '-';
+    final String treatment = _orderData['treatment'] ?? '-';
+    final String totalAmount = _orderData['totalPrice'] ?? 'Rp 0';
+    final String status = _orderData['status'] ?? '-';
+    final String speed = _orderData['speed'] ?? '-';
+    final int currentStep = _getCurrentStepIndex(status);
 
     return Scaffold(
       backgroundColor: const Color(0xFFF8F9FA),
@@ -112,9 +166,9 @@ class _StatusPesananPageState extends State<StatusPesananPage> {
                       ),
                     ),
                     const SizedBox(height: 4),
-                    const Text(
-                      '22 Oktober 2026 17.20',
-                      style: TextStyle(fontSize: 12, color: Colors.grey),
+                    Text(
+                      _orderData['estimate'] ?? '-',
+                      style: const TextStyle(fontSize: 12, color: Colors.grey),
                     ),
                   ],
                 ),
@@ -158,32 +212,31 @@ class _StatusPesananPageState extends State<StatusPesananPage> {
                   ),
                   const SizedBox(height: 12),
 
-                  // Timeline Item 1 - 11 (Step 4 & 5 menyesuaikan status bayar)
-                  _buildTimelineItem(step: '1', title: 'Konfirmasi Pesanan', subtitle: '22 Oktober 2026 - 17.35', isCompleted: true, isCurrent: false, showLine: true),
-                  _buildTimelineItem(step: '2', title: 'Menunggu Penjemputan', subtitle: '22 Oktober 2026 - 17.35', isCompleted: true, isCurrent: false, showLine: true),
-                  _buildTimelineItem(step: '3', title: 'Cucian Dijemput dan Ditimbang', subtitle: '22 Oktober 2026 - 17.35', isCompleted: true, isCurrent: false, showLine: true),
+                  _buildTimelineItem(step: '1', title: 'Konfirmasi Pesanan', subtitle: 'Pesanan diterima sistem', isCompleted: currentStep > 1 || status == 'Selesai', isCurrent: currentStep == 1, showLine: true),
+                  _buildTimelineItem(step: '2', title: 'Menunggu Penjemputan', subtitle: 'Kurir menuju lokasi / antar ke outlet', isCompleted: currentStep > 2 || status == 'Selesai', isCurrent: currentStep == 2, showLine: true),
+                  _buildTimelineItem(step: '3', title: 'Cucian Dijemput dan Ditimbang', subtitle: 'Pengecekan berat/jumlah & harga final', isCompleted: currentStep > 3 || status == 'Selesai', isCurrent: currentStep == 3, showLine: true),
                   _buildTimelineItem(
                     step: '4',
                     title: 'Menunggu Pembayaran',
-                    subtitle: _isPaid ? 'Pembayaran Selesai' : 'Silakan selesaikan pembayaran',
-                    isCompleted: _isPaid,
-                    isCurrent: !_isPaid,
+                    subtitle: _isPaid || currentStep > 4 ? 'Pembayaran Selesai' : 'Silakan selesaikan pembayaran',
+                    isCompleted: _isPaid || currentStep > 4 || status == 'Selesai',
+                    isCurrent: currentStep == 4 && !_isPaid,
                     showLine: true,
                   ),
                   _buildTimelineItem(
                     step: '5',
                     title: 'Pembayaran Terverifikasi',
-                    subtitle: _isPaid ? 'Terverifikasi Otomatis' : 'Menunggu pembayaran',
-                    isCompleted: _isPaid,
-                    isCurrent: false,
+                    subtitle: _isPaid || currentStep > 5 ? 'Terverifikasi' : 'Menunggu pembayaran',
+                    isCompleted: _isPaid || currentStep > 5 || status == 'Selesai',
+                    isCurrent: currentStep == 5,
                     showLine: true,
                   ),
-                  _buildTimelineItem(step: '6', title: 'Dalam Antrean', subtitle: '22 Oktober 2026 - 17.35', isCompleted: _isPaid, isCurrent: false, showLine: true),
-                  _buildTimelineItem(step: '7', title: 'Pencucian', subtitle: '22 Oktober 2026 - 17.35', isCompleted: false, isCurrent: _isPaid, showLine: true),
-                  _buildTimelineItem(step: '8', title: 'Pengeringan', subtitle: '22 Oktober 2026 - 17.35', isCompleted: false, isCurrent: false, showLine: true),
-                  _buildTimelineItem(step: '9', title: 'Penyetrikaan', subtitle: '22 Oktober 2026 - 17.35', isCompleted: false, isCurrent: false, showLine: true),
-                  _buildTimelineItem(step: '10', title: 'Siap Diambil/Dikirim', subtitle: '22 Oktober 2026 - 17.35', isCompleted: false, isCurrent: false, showLine: true),
-                  _buildTimelineItem(step: '11', title: 'Selesai', subtitle: '22 Oktober 2026 - 17.35', isCompleted: false, isCurrent: false, showLine: false),
+                  _buildTimelineItem(step: '6', title: 'Dalam Antrean', subtitle: 'Menunggu giliran mesin cuci', isCompleted: currentStep > 6 || status == 'Selesai', isCurrent: currentStep == 6, showLine: true),
+                  _buildTimelineItem(step: '7', title: 'Pencucian', subtitle: 'Proses pencucian pakaian', isCompleted: currentStep > 7 || status == 'Selesai', isCurrent: currentStep == 7, showLine: true),
+                  _buildTimelineItem(step: '8', title: 'Pengeringan', subtitle: 'Proses pengeringan pakaian', isCompleted: currentStep > 8 || status == 'Selesai', isCurrent: currentStep == 8, showLine: true),
+                  _buildTimelineItem(step: '9', title: 'Penyetrikaan', subtitle: 'Proses setrika & lipat rapi', isCompleted: currentStep > 9 || status == 'Selesai', isCurrent: currentStep == 9, showLine: true),
+                  _buildTimelineItem(step: '10', title: 'Siap Diambil/Dikirim', subtitle: 'Pesanan siap diserahkan', isCompleted: currentStep > 10 || status == 'Selesai', isCurrent: currentStep == 10, showLine: true),
+                  _buildTimelineItem(step: '11', title: 'Selesai', subtitle: 'Pesanan telah diterima pelanggan', isCompleted: status == 'Selesai', isCurrent: false, showLine: false),
                 ],
               ),
             ),
@@ -232,8 +285,8 @@ class _StatusPesananPageState extends State<StatusPesananPage> {
                   Text('No. Pesanan $orderId', style: const TextStyle(fontSize: 11, color: Colors.grey)),
                   const Divider(height: 20),
 
-                  _buildBillRow('Jenis Laundry', serviceName.contains('Kiloan') ? 'Kiloan' : 'Satuan'),
-                  _buildBillRow('Kecepatan Layanan', 'Reguler'),
+                  _buildBillRow('Jenis Laundry', serviceName == '-' ? '-' : (serviceName.contains('Kiloan') ? 'Kiloan' : 'Satuan')),
+                  _buildBillRow('Kecepatan Layanan', speed),
                   _buildBillRow('Pengerjaan', treatment),
                   _buildBillRow('Berat Aktual', weight),
                   const SizedBox(height: 8),
@@ -265,7 +318,6 @@ class _StatusPesananPageState extends State<StatusPesananPage> {
                   ),
                   const SizedBox(height: 16),
 
-                  // Tombol Cek Detail Pembayaran
                   SizedBox(
                     width: double.infinity,
                     height: 48,
@@ -333,13 +385,13 @@ class _StatusPesananPageState extends State<StatusPesananPage> {
                 child: isCompleted
                     ? const Icon(Icons.check, size: 14, color: Colors.white)
                     : Text(
-                  step,
-                  style: TextStyle(
-                    fontSize: 11,
-                    color: isCurrent ? Colors.white : Colors.grey.shade600,
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
+                        step,
+                        style: TextStyle(
+                          fontSize: 11,
+                          color: isCurrent ? Colors.white : Colors.grey.shade600,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
               ),
             ),
             if (showLine)

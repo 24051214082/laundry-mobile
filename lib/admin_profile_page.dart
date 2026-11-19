@@ -1,7 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 
-import 'admin_bottom_nav.dart'; // sesuaikan path folder
+import 'admin_bottom_nav.dart';
+import 'user_session.dart';
 
 class AdminProfilePage extends StatefulWidget {
   const AdminProfilePage({super.key});
@@ -18,7 +19,6 @@ class _AdminProfilePageState extends State<AdminProfilePage> {
 
   final _formKey = GlobalKey<FormState>();
 
-  // TODO: ganti dengan data admin asli dari backend / state management
   final _nameC = TextEditingController(text: 'Admin Nency');
   final _phoneC = TextEditingController(text: '+62 812-3456-7890');
   final _emailC = TextEditingController(text: 'nency@wishyouwashhere.com');
@@ -70,7 +70,6 @@ class _AdminProfilePageState extends State<AdminProfilePage> {
     if (!_formKey.currentState!.validate()) return;
     FocusScope.of(context).unfocus();
 
-    // TODO: kirim perubahan ke backend
     setState(() {
       _savedName = _nameC.text;
       _savedEmail = _emailC.text;
@@ -212,7 +211,6 @@ class _AdminProfilePageState extends State<AdminProfilePage> {
     );
   }
 
-  // --------------------------------------------------------------- AVATAR
   Widget _buildAvatarSection() {
     return Center(
       child: Column(
@@ -247,9 +245,7 @@ class _AdminProfilePageState extends State<AdminProfilePage> {
                 right: 2,
                 bottom: 2,
                 child: GestureDetector(
-                  onTap: () {
-                    // TODO: ganti foto profil
-                  },
+                  onTap: () {},
                   child: Container(
                     padding: const EdgeInsets.all(6),
                     decoration: BoxDecoration(
@@ -294,7 +290,6 @@ class _AdminProfilePageState extends State<AdminProfilePage> {
     );
   }
 
-  // ---------------------------------------------------------------- FIELD
   Widget _field({
     required String label,
     required IconData icon,
@@ -356,7 +351,6 @@ class _AdminProfilePageState extends State<AdminProfilePage> {
     );
   }
 
-  // -------------------------------------------------------------- BUTTONS
   Widget _buildSaveButton() {
     return SizedBox(
       width: double.infinity,
@@ -433,9 +427,10 @@ class _AdminProfilePageState extends State<AdminProfilePage> {
                 style: GoogleFonts.poppins(color: const Color(0xFF64748B))),
           ),
           TextButton(
-            onPressed: () {
+            onPressed: () async {
+              await UserSession.clear();
+              if (!context.mounted) return;
               Navigator.pop(ctx);
-              // TODO: sesuaikan nama route login & hapus sesi/token
               Navigator.pushNamedAndRemoveUntil(
                   context, '/login', (route) => false);
             },

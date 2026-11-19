@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'app_bottom_nav.dart';
 import 'user_profile_store.dart';
+import 'user_session.dart';
 
 class _C {
   static const headerBlue = Color(0xFFD6EFFB);
@@ -24,8 +25,6 @@ class ProfilePage extends StatefulWidget {
 class _ProfilePageState extends State<ProfilePage> {
   final _formKey = GlobalKey<FormState>();
 
-  // Data profil diambil dari store bersama, bukan dari state halaman ini,
-  // supaya tidak reset saat pindah halaman.
   final _store = UserProfileStore.instance;
 
   late final TextEditingController _nameC;
@@ -58,7 +57,6 @@ class _ProfilePageState extends State<ProfilePage> {
     super.dispose();
   }
 
-  /// Tombol simpan hanya aktif kalau ada data yang berubah.
   void _checkDirty() {
     final dirty = _nameC.text.trim() != _store.name ||
         _phoneC.text.trim() != _store.phone ||
@@ -73,7 +71,6 @@ class _ProfilePageState extends State<ProfilePage> {
 
     setState(() => _isSaving = true);
 
-    // TODO: ganti dengan request update ke API / database
     await Future.delayed(const Duration(milliseconds: 600));
 
     if (!mounted) return;
@@ -175,7 +172,9 @@ class _ProfilePageState extends State<ProfilePage> {
                   const SizedBox(width: 12),
                   Expanded(
                     child: ElevatedButton(
-                      onPressed: () {
+                      onPressed: () async {
+                        await UserSession.clear();
+                        if (!context.mounted) return;
                         Navigator.pop(context);
                         Navigator.pushNamedAndRemoveUntil(
                           context,
@@ -213,7 +212,6 @@ class _ProfilePageState extends State<ProfilePage> {
   @override
   Widget build(BuildContext context) {
     return GestureDetector(
-      // Tap area kosong untuk menutup keyboard
       onTap: () => FocusScope.of(context).unfocus(),
       child: Scaffold(
         backgroundColor: _C.headerBlue,
@@ -384,10 +382,6 @@ class _ProfilePageState extends State<ProfilePage> {
       ),
     );
   }
-
-  // ---------------------------------------------------------------------------
-  // Widget Bagian
-  // ---------------------------------------------------------------------------
 
   Widget _buildAvatar() {
     return Column(
