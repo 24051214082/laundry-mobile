@@ -425,7 +425,7 @@ class _HomePageState extends State<HomePage> {
                     // 1. Laundry Kiloan
                     _buildServiceCard(
                       title: 'Laundry Kiloan',
-                      desc: 'Bersih, wangi, dan rapi setiap hari.',
+                      desc: 'Bersih, wangi, dan rapi setiap hari. (Minimal order 7 kg)',
                       price: 'Rp 3.000/kg',
                       imagePath: 'assets/laundrykiloan.PNG',
                       onTap: () => _navigateToBooking('Laundry Kiloan'),
@@ -433,7 +433,7 @@ class _HomePageState extends State<HomePage> {
                     // 2. Laundry Satuan
                     _buildServiceCard(
                       title: 'Laundry Satuan',
-                      desc: 'Untuk pakaian khusus dan delicate.',
+                      desc: 'Untuk pakaian khusus dan delicate. Jangan khawatir, kami memberikan perawatan ekstra untuk pakaianmu!',
                       price: 'Rp 15.000/pcs',
                       imagePath: 'assets/laundrysatuan2.png',
                       onTap: () => _navigateToBooking('Laundry Satuan'),
@@ -442,7 +442,7 @@ class _HomePageState extends State<HomePage> {
                     _buildServiceCard(
                       title: 'Bed Cover',
                       desc: 'Selimut bersih, tidur nyenyak sampai pagi.',
-                      price: 'Rp 25.000',
+                      price: 'Rp 20.000',
                       imagePath: 'assets/laundrybedcover.PNG',
                       onTap: () => _navigateToBooking('Bed Cover'),
                     ),
