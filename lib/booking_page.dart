@@ -25,6 +25,7 @@ class _BookingPageState extends State<BookingPage> {
     'Bed Cover': 25000,
     'Boneka': 15000,
   };
+  final Map<String, String> _serviceIds = {};
 
   // Sub-kategori khusus Satuan (diambil dari tabel `satuan_items`)
   String _barangSatuan = 'Kaos';
@@ -120,8 +121,12 @@ class _BookingPageState extends State<BookingPage> {
       setState(() {
         if (servicesData.isNotEmpty) {
           for (final row in servicesData) {
+            final id = (row['id'] ?? '').toString().trim();
             final name = (row['name'] ?? '').toString().trim();
             final price = _parseIntPrice(row['price'], 0);
+            if (name.isNotEmpty && id.isNotEmpty) {
+              _serviceIds[name] = id;
+            }
             if (name.isNotEmpty && price > 0) {
               _hargaLayanan[name] = price;
               if (name.toLowerCase().contains('kiloan') && price >= 10000) {
@@ -1057,11 +1062,13 @@ class _BookingPageState extends State<BookingPage> {
         : '$_tanggalText, $_jamText';
 
     final hasFixedEstimate = _selectedService == 'Laundry Kiloan' || _isSatuan;
+    final resolvedServiceId = _serviceIds[_selectedService];
 
     Navigator.pushNamed(
       context,
       '/order-confirmation',
       arguments: OrderSummary(
+        serviceId: resolvedServiceId,
         jenisLaundry: labelLayanan,
         kecepatan: _kecepatan,
         pengerjaan: _pengerjaan,

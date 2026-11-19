@@ -22,6 +22,7 @@ class CostItem {
 }
 
 class OrderSummary {
+  final String? serviceId;
   final String jenisLaundry;
   final String kecepatan;
   final String pengerjaan;
@@ -39,6 +40,7 @@ class OrderSummary {
   final String subtotal;
 
   const OrderSummary({
+    this.serviceId,
     required this.jenisLaundry,
     required this.kecepatan,
     required this.pengerjaan,
@@ -151,6 +153,33 @@ class _OrderConfirmationPageState extends State<OrderConfirmationPage> {
     return currentUser?.id;
   }
 
+  Future<String?> _resolveServiceId(
+      SupabaseClient client,
+      OrderSummary summary,
+      ) async {
+    final directId = summary.serviceId?.trim();
+    if (directId != null && directId.isNotEmpty) {
+      return directId;
+    }
+
+    final rawName = summary.jenisLaundry.trim();
+    final lookupName =
+    rawName.startsWith('Satuan:') ? 'Laundry Satuan' : rawName;
+    if (lookupName.isEmpty) return null;
+
+    try {
+      final row = await client
+          .from('services')
+          .select('id')
+          .eq('name', lookupName)
+          .maybeSingle();
+      final id = (row?['id'] ?? '').toString().trim();
+      return id.isNotEmpty ? id : null;
+    } catch (_) {
+      return null;
+    }
+  }
+
   Future<String> _generateNextOrderCode(SupabaseClient client) async {
     try {
       final rows = await client.from('orders').select('order_code');
@@ -184,6 +213,7 @@ class _OrderConfirmationPageState extends State<OrderConfirmationPage> {
       final client = Supabase.instance.client;
       final currentUser = client.auth.currentUser;
       final orderCode = await _generateNextOrderCode(client);
+      final resolvedServiceId = await _resolveServiceId(client, summary);
 
       final totalPrice = summary.estimatedTotal > 0
           ? summary.estimatedTotal
@@ -210,6 +240,10 @@ class _OrderConfirmationPageState extends State<OrderConfirmationPage> {
         'status': 'Waiting',
         'payment_status': 'Belum Lunas',
       };
+
+      if (resolvedServiceId != null && resolvedServiceId.isNotEmpty) {
+        payload['service_id'] = resolvedServiceId;
+      }
 
       if (resolvedUid != null && resolvedUid.isNotEmpty) {
         payload['user_id'] = resolvedUid;
