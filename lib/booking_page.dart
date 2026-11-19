@@ -15,9 +15,8 @@ class _BookingPageState extends State<BookingPage> {
   String _selectedService = 'Laundry Kiloan';
   bool _isInit = true;
 
-  // Sub-kategori khusus Satuan
+  // Sub-kategori khusus Satuan (Harga paten per item)
   String _barangSatuan = 'Kaos';
-  // Harga MULAI DARI per item untuk Laundry Satuan (ubah angkanya di sini).
   static const Map<String, int> _hargaSatuan = {
     'Kaos': 15000,
     'Kemeja': 15000,
@@ -109,7 +108,8 @@ class _BookingPageState extends State<BookingPage> {
         elevation: 0,
         centerTitle: true,
         leading: IconButton(
-          icon: const Icon(Icons.arrow_back_ios_new, color: Color(0xFF1B4E6C), size: 20),
+          icon: const Icon(Icons.arrow_back_ios_new,
+              color: Color(0xFF1B4E6C), size: 20),
           onPressed: () => Navigator.pop(context),
         ),
         title: Text(
@@ -158,10 +158,10 @@ class _BookingPageState extends State<BookingPage> {
                       _isBoneka
                           ? Icons.smart_toy_outlined
                           : _isSatuan
-                          ? Icons.checkroom_rounded
-                          : _selectedService == 'Bed Cover'
-                          ? Icons.bed_rounded
-                          : Icons.scale_rounded,
+                              ? Icons.checkroom_rounded
+                              : _selectedService == 'Bed Cover'
+                                  ? Icons.bed_rounded
+                                  : Icons.scale_rounded,
                       color: Colors.white,
                       size: 26,
                     ),
@@ -196,7 +196,10 @@ class _BookingPageState extends State<BookingPage> {
             // ================= Sub-Kategori Satuan (Hanya Tampil Jika Satuan) =================
             if (_isSatuan) ...[
               const SizedBox(height: 16),
-              _buildSectionHeader('Pilih Jenis Pakaian Satuan', 'Pilih item yang ingin dicuci'),
+              _buildSectionHeader(
+                'Pilih Jenis Pakaian Satuan',
+                'Pilih item yang ingin dicuci (tarif per pcs)',
+              ),
               const SizedBox(height: 10),
               Container(
                 width: double.infinity,
@@ -227,9 +230,10 @@ class _BookingPageState extends State<BookingPage> {
                             ),
                           ),
                           Text(
-                            'Mulai ${_rupiah(_hargaSatuan[item]!)}',
+                            _rupiah(_hargaSatuan[item]!),
                             style: GoogleFonts.poppins(
-                              fontSize: 9,
+                              fontSize: 9.5,
+                              fontWeight: FontWeight.w500,
                               color: isPicked
                                   ? Colors.white70
                                   : const Color(0xFF64748B),
@@ -249,41 +253,13 @@ class _BookingPageState extends State<BookingPage> {
                   }).toList(),
                 ),
               ),
-              const SizedBox(height: 10),
-              Container(
-                width: double.infinity,
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-                decoration: BoxDecoration(
-                  color: const Color(0xFFEDE9FE),
-                  borderRadius: BorderRadius.circular(10),
-                ),
-                child: Row(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    const Icon(Icons.info_outline_rounded,
-                        size: 20, color: Color(0xFF5B429A)),
-                    const SizedBox(width: 8),
-                    Expanded(
-                      child: Text(
-                        'Harga yang tertera adalah harga mulai dari (start from). '
-                        'Total tagihan akan dikonfirmasi admin setelah barang '
-                        'dilihat langsung, jadi harga akhir bisa berbeda.',
-                        style: GoogleFonts.poppins(
-                          fontSize: 10.5,
-                          color: const Color(0xFF4C1D95),
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
             ],
 
             const SizedBox(height: 24),
 
             // ================= 1. Kecepatan Layanan =================
-            _buildSectionHeader('Kecepatan Pengerjaan', 'Pilih durasi pengerjaan'),
+            _buildSectionHeader(
+                'Kecepatan Pengerjaan', 'Pilih durasi pengerjaan'),
             const SizedBox(height: 10),
             Row(
               children: [
@@ -331,7 +307,8 @@ class _BookingPageState extends State<BookingPage> {
                 child: Row(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    const Icon(Icons.info_outline, color: Color(0xFFB45309), size: 20),
+                    const Icon(Icons.info_outline,
+                        color: Color(0xFFB45309), size: 20),
                     const SizedBox(width: 8),
                     Expanded(
                       child: Text(
@@ -366,7 +343,8 @@ class _BookingPageState extends State<BookingPage> {
                       tagText: 'Rapi & Wangi',
                       desc: '+Rp5.000',
                       isSelected: _pengerjaan == 'Cuci + Setrika',
-                      onTap: () => setState(() => _pengerjaan = 'Cuci + Setrika'),
+                      onTap: () =>
+                          setState(() => _pengerjaan = 'Cuci + Setrika'),
                     ),
                   ),
                 ],
@@ -376,7 +354,8 @@ class _BookingPageState extends State<BookingPage> {
             const SizedBox(height: 24),
 
             // ================= 3. Deterjen & Pewangi =================
-            _buildSectionHeader('Deterjen & Pewangi Khusus', 'Pilih merk atau gunakan bawaan'),
+            _buildSectionHeader('Deterjen & Pewangi Khusus',
+                'Pilih merk atau gunakan bawaan'),
             const SizedBox(height: 10),
             Container(
               padding: const EdgeInsets.all(14),
@@ -491,7 +470,8 @@ class _BookingPageState extends State<BookingPage> {
             const SizedBox(height: 24),
 
             // ================= 4. Metode Penjemputan =================
-            _buildSectionHeader('Metode Penjemputan', 'Pilih cara cucian sampai ke outlet'),
+            _buildSectionHeader(
+                'Metode Penjemputan', 'Pilih cara cucian sampai ke outlet'),
             const SizedBox(height: 10),
             Row(
               children: [
@@ -523,17 +503,20 @@ class _BookingPageState extends State<BookingPage> {
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                _buildSectionHeader('Jadwal Penjemputan', 'Tentukan jadwal kurir tiba'),
+                _buildSectionHeader(
+                    'Jadwal Penjemputan', 'Tentukan jadwal kurir tiba'),
                 if (_isAntarSendiri)
                   Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
                     decoration: BoxDecoration(
                       color: Colors.grey.shade200,
                       borderRadius: BorderRadius.circular(4),
                     ),
                     child: Text(
                       'Nonaktif',
-                      style: GoogleFonts.poppins(fontSize: 10, color: Colors.grey.shade600),
+                      style: GoogleFonts.poppins(
+                          fontSize: 10, color: Colors.grey.shade600),
                     ),
                   ),
               ],
@@ -548,14 +531,16 @@ class _BookingPageState extends State<BookingPage> {
                       onTap: _isAntarSendiri
                           ? null
                           : () async {
-                        final picked = await showDatePicker(
-                          context: context,
-                          initialDate: _selectedDate,
-                          firstDate: DateTime(2026),
-                          lastDate: DateTime(2030),
-                        );
-                        if (picked != null) setState(() => _selectedDate = picked);
-                      },
+                              final picked = await showDatePicker(
+                                context: context,
+                                initialDate: _selectedDate,
+                                firstDate: DateTime(2026),
+                                lastDate: DateTime(2030),
+                              );
+                              if (picked != null) {
+                                setState(() => _selectedDate = picked);
+                              }
+                            },
                       child: _buildPickerBox(
                         icon: Icons.calendar_today_rounded,
                         label: 'Tanggal Jemput',
@@ -570,12 +555,14 @@ class _BookingPageState extends State<BookingPage> {
                       onTap: _isAntarSendiri
                           ? null
                           : () async {
-                        final picked = await showTimePicker(
-                          context: context,
-                          initialTime: _selectedTime,
-                        );
-                        if (picked != null) setState(() => _selectedTime = picked);
-                      },
+                              final picked = await showTimePicker(
+                                context: context,
+                                initialTime: _selectedTime,
+                              );
+                              if (picked != null) {
+                                setState(() => _selectedTime = picked);
+                              }
+                            },
                       child: _buildPickerBox(
                         icon: Icons.access_time_rounded,
                         label: 'Jam Jemput',
@@ -591,7 +578,8 @@ class _BookingPageState extends State<BookingPage> {
             const SizedBox(height: 24),
 
             // ================= 5b. Metode Pengiriman =================
-            _buildSectionHeader('Metode Pengiriman', 'Pilih cara menerima cucian yang sudah bersih'),
+            _buildSectionHeader('Metode Pengiriman',
+                'Pilih cara menerima cucian yang sudah bersih'),
             const SizedBox(height: 10),
             Row(
               children: [
@@ -620,7 +608,8 @@ class _BookingPageState extends State<BookingPage> {
             const SizedBox(height: 24),
 
             // ================= 6. Alamat Laundry =================
-            _buildSectionHeader('Alamat Outlet Laundry', 'Lokasi cucian diproses'),
+            _buildSectionHeader(
+                'Alamat Outlet Laundry', 'Lokasi cucian diproses'),
             const SizedBox(height: 8),
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
@@ -664,7 +653,8 @@ class _BookingPageState extends State<BookingPage> {
             // Alamat Penjemputan jika Penjemputan dipilih
             if (!_isAntarSendiri) ...[
               const SizedBox(height: 18),
-              _buildSectionHeader('Alamat Anda', 'Kurir akan mengambil/mengantar cucian di sini'),
+              _buildSectionHeader('Alamat Anda',
+                  'Kurir akan mengambil/mengantar cucian di sini'),
               const SizedBox(height: 8),
               _buildAddressInput(_alamatPenjemputan),
             ],
@@ -673,16 +663,17 @@ class _BookingPageState extends State<BookingPage> {
 
             // Alamat Pengiriman: hanya perlu diisi kalau cucian diantar sendiri
             // ke outlet tapi ingin dikirim kurir saat selesai.
-            // (Kalau Penjemputan, kurir mengantar ke alamat penjemputan.)
             if (_isKirimKurir && _isAntarSendiri) ...[
-              _buildSectionHeader('Alamat Pengiriman', 'Kurir akan mengantar cucian bersih ke sini'),
+              _buildSectionHeader('Alamat Pengiriman',
+                  'Kurir akan mengantar cucian bersih ke sini'),
               const SizedBox(height: 8),
               _buildAddressInput(_alamatPengiriman),
               const SizedBox(height: 24),
             ],
 
             // ================= 7. Catatan =================
-            _buildSectionHeader('Catatan Khusus', '(Opsional) Berikan instruksi tambahan'),
+            _buildSectionHeader(
+                'Catatan Khusus', '(Opsional) Berikan instruksi tambahan'),
             const SizedBox(height: 8),
             Container(
               decoration: BoxDecoration(
@@ -695,7 +686,8 @@ class _BookingPageState extends State<BookingPage> {
                 maxLines: 3,
                 style: GoogleFonts.poppins(fontSize: 12),
                 decoration: const InputDecoration(
-                  hintText: 'Contoh: Pakaian putih dipisah / jahitan boneka rapuh.',
+                  hintText:
+                      'Contoh: Pakaian putih dipisah / jahitan boneka rapuh.',
                   border: InputBorder.none,
                   contentPadding: EdgeInsets.all(12),
                 ),
@@ -743,8 +735,18 @@ class _BookingPageState extends State<BookingPage> {
   static const int _biayaPewangi = 1000;
 
   static const List<String> _namaBulan = [
-    'Januari', 'Februari', 'Maret', 'April', 'Mei', 'Juni',
-    'Juli', 'Agustus', 'September', 'Oktober', 'November', 'Desember'
+    'Januari',
+    'Februari',
+    'Maret',
+    'April',
+    'Mei',
+    'Juni',
+    'Juli',
+    'Agustus',
+    'September',
+    'Oktober',
+    'November',
+    'Desember'
   ];
 
   String get _tanggalText =>
@@ -777,7 +779,9 @@ class _BookingPageState extends State<BookingPage> {
       return;
     }
 
-    if (_isAntarSendiri && _isKirimKurir && _alamatPengiriman.text.trim().isEmpty) {
+    if (_isAntarSendiri &&
+        _isKirimKurir &&
+        _alamatPengiriman.text.trim().isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           backgroundColor: Colors.redAccent,
@@ -804,14 +808,15 @@ class _BookingPageState extends State<BookingPage> {
     } else if (_isSatuan) {
       labelLayanan = 'Satuan: $_barangSatuan';
       final hargaItem = _hargaSatuan[_barangSatuan]!;
-      biaya.add(CostItem('Satuan ($_barangSatuan)', 'Mulai ${_rupiah(hargaItem)}'));
-      subtotal += hargaItem;
+      tambah('Satuan ($_barangSatuan)', hargaItem);
     } else {
       biaya.add(CostItem(_selectedService, 'Dihitung admin'));
     }
 
     if (_kecepatan == 'Express') tambah('Layanan Express', _biayaExpress);
-    if (_pengerjaan == 'Cuci + Setrika') tambah('Layanan Cuci + Setrika', _biayaSetrika);
+    if (_pengerjaan == 'Cuci + Setrika') {
+      tambah('Layanan Cuci + Setrika', _biayaSetrika);
+    }
     if (_deterjen != 'tanpa') tambah('Deterjen ($_deterjen)', _biayaDeterjen);
     if (_pewangi != 'tanpa') tambah('Pewangi ($_pewangi)', _biayaPewangi);
 
@@ -839,19 +844,15 @@ class _BookingPageState extends State<BookingPage> {
         jadwal: finalJadwal,
         alamat: finalAlamat,
         biaya: biaya,
-        subtotal: _selectedService == 'Laundry Kiloan'
+        subtotal: (_selectedService == 'Laundry Kiloan' || _isSatuan)
             ? _rupiah(subtotal)
-            : _isSatuan
-                ? 'Mulai ${_rupiah(subtotal)}'
-                : 'Menunggu Review Admin',
+            : 'Menunggu Review Admin',
       ),
     );
   }
 
   // --- Helper Widgets ---
 
-  /// Input alamat yang terisi otomatis dari alamat utama di profil,
-  /// tapi tetap bisa diubah khusus untuk pesanan ini.
   Widget _buildAddressInput(TextEditingController controller) {
     final alamatUtama = UserProfileStore.instance.address;
     final isChanged = controller.text.trim() != alamatUtama;
@@ -948,7 +949,8 @@ class _BookingPageState extends State<BookingPage> {
           color: isSelected ? const Color(0xFFE8F6FC) : Colors.white,
           borderRadius: BorderRadius.circular(10),
           border: Border.all(
-            color: isSelected ? const Color(0xFF338CA8) : const Color(0xFFCBD5E1),
+            color:
+                isSelected ? const Color(0xFF338CA8) : const Color(0xFFCBD5E1),
             width: isSelected ? 1.8 : 1,
           ),
         ),
@@ -967,8 +969,12 @@ class _BookingPageState extends State<BookingPage> {
                   ),
                 ),
                 Icon(
-                  isSelected ? Icons.check_circle_rounded : Icons.radio_button_off_rounded,
-                  color: isSelected ? const Color(0xFF338CA8) : const Color(0xFF94A3B8),
+                  isSelected
+                      ? Icons.check_circle_rounded
+                      : Icons.radio_button_off_rounded,
+                  color: isSelected
+                      ? const Color(0xFF338CA8)
+                      : const Color(0xFF94A3B8),
                   size: 18,
                 ),
               ],
@@ -992,7 +998,8 @@ class _BookingPageState extends State<BookingPage> {
             const SizedBox(height: 4),
             Text(
               desc,
-              style: GoogleFonts.poppins(fontSize: 10, color: const Color(0xFF64748B)),
+              style: GoogleFonts.poppins(
+                  fontSize: 10, color: const Color(0xFF64748B)),
             ),
           ],
         ),
@@ -1017,7 +1024,9 @@ class _BookingPageState extends State<BookingPage> {
           children: [
             Icon(
               isSelected ? Icons.radio_button_checked : Icons.radio_button_off,
-              color: isSelected ? const Color(0xFF338CA8) : const Color(0xFF94A3B8),
+              color: isSelected
+                  ? const Color(0xFF338CA8)
+                  : const Color(0xFF94A3B8),
               size: 17,
             ),
             const SizedBox(width: 6),
@@ -1029,15 +1038,19 @@ class _BookingPageState extends State<BookingPage> {
                       label,
                       style: GoogleFonts.poppins(
                         fontSize: 10.5,
-                        color: isSelected ? const Color(0xFF1B4E6C) : const Color(0xFF475569),
-                        fontWeight: isSelected ? FontWeight.w600 : FontWeight.w400,
+                        color: isSelected
+                            ? const Color(0xFF1B4E6C)
+                            : const Color(0xFF475569),
+                        fontWeight:
+                            isSelected ? FontWeight.w600 : FontWeight.w400,
                       ),
                     ),
                   ),
                   if (badge != null) ...[
                     const SizedBox(width: 4),
                     Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 1),
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 4, vertical: 1),
                       decoration: BoxDecoration(
                         color: const Color(0xFFDCFCE7),
                         borderRadius: BorderRadius.circular(4),
@@ -1076,7 +1089,8 @@ class _BookingPageState extends State<BookingPage> {
           color: isSelected ? const Color(0xFFE8F6FC) : Colors.white,
           borderRadius: BorderRadius.circular(10),
           border: Border.all(
-            color: isSelected ? const Color(0xFF338CA8) : const Color(0xFFCBD5E1),
+            color:
+                isSelected ? const Color(0xFF338CA8) : const Color(0xFFCBD5E1),
             width: isSelected ? 1.8 : 1,
           ),
         ),
@@ -1084,7 +1098,9 @@ class _BookingPageState extends State<BookingPage> {
           children: [
             Icon(
               icon,
-              color: isSelected ? const Color(0xFF338CA8) : const Color(0xFF64748B),
+              color: isSelected
+                  ? const Color(0xFF338CA8)
+                  : const Color(0xFF64748B),
               size: 24,
             ),
             const SizedBox(width: 10),
@@ -1111,8 +1127,12 @@ class _BookingPageState extends State<BookingPage> {
               ),
             ),
             Icon(
-              isSelected ? Icons.check_circle_rounded : Icons.radio_button_off_rounded,
-              color: isSelected ? const Color(0xFF338CA8) : const Color(0xFF94A3B8),
+              isSelected
+                  ? Icons.check_circle_rounded
+                  : Icons.radio_button_off_rounded,
+              color: isSelected
+                  ? const Color(0xFF338CA8)
+                  : const Color(0xFF94A3B8),
               size: 18,
             ),
           ],
@@ -1151,7 +1171,9 @@ class _BookingPageState extends State<BookingPage> {
             children: [
               Icon(
                 icon,
-                color: isDisabled ? const Color(0xFF94A3B8) : const Color(0xFF338CA8),
+                color: isDisabled
+                    ? const Color(0xFF94A3B8)
+                    : const Color(0xFF338CA8),
                 size: 16,
               ),
               const SizedBox(width: 6),
@@ -1161,7 +1183,9 @@ class _BookingPageState extends State<BookingPage> {
                   style: GoogleFonts.poppins(
                     fontSize: 11.5,
                     fontWeight: FontWeight.w600,
-                    color: isDisabled ? const Color(0xFF94A3B8) : const Color(0xFF1E293B),
+                    color: isDisabled
+                        ? const Color(0xFF94A3B8)
+                        : const Color(0xFF1E293B),
                   ),
                 ),
               ),

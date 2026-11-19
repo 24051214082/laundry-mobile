@@ -10,11 +10,6 @@ class ManageServicesPage extends StatefulWidget {
 }
 
 class _ManageServicesPageState extends State<ManageServicesPage> {
-  bool _isBannerActive = true;
-  final TextEditingController _bannerTextController = TextEditingController(
-    text: 'Selamat datang! Saatnya pakaian bersih lagi!',
-  );
-
   // 1. Controller Tarif Utama
   final TextEditingController _kiloanController =
       TextEditingController(text: '3.000');
@@ -25,17 +20,17 @@ class _ManageServicesPageState extends State<ManageServicesPage> {
   final TextEditingController _bonekaController =
       TextEditingController(text: '15.000');
 
-  // 2. Sub-item Tarif Laundry Satuan
-  final Map<String, TextEditingController> _satuanItemControllers = {
-    'Kaos': TextEditingController(text: '15.000'),
-    'Kemeja': TextEditingController(text: '15.000'),
-    'Celana Pendek': TextEditingController(text: '15.000'),
-    'Celana Panjang': TextEditingController(text: '17.000'),
-    'Jeans': TextEditingController(text: '20.000'),
-    'Jas': TextEditingController(text: '30.000'),
-    'Handuk': TextEditingController(text: '15.000'),
-    'Set Seprei': TextEditingController(text: '25.000'),
-  };
+  // 2. Sub-item Tarif Laundry Satuan (List agar bisa CRUD nama & harga dengan mudah)
+  final List _satuanItems = [
+    {'name': 'Kaos', 'price': '15.000'},
+    {'name': 'Kemeja', 'price': '15.000'},
+    {'name': 'Celana Pendek', 'price': '15.000'},
+    {'name': 'Celana Panjang', 'price': '17.000'},
+    {'name': 'Jeans', 'price': '20.000'},
+    {'name': 'Jas', 'price': '30.000'},
+    {'name': 'Handuk', 'price': '15.000'},
+    {'name': 'Set Seprei', 'price': '25.000'},
+  ];
 
   // 3. Pengaturan Tambahan Umum
   final TextEditingController _tarifMinKiloanController =
@@ -47,7 +42,7 @@ class _ManageServicesPageState extends State<ManageServicesPage> {
   final TextEditingController _setrikaController =
       TextEditingController(text: '5.000');
 
-  // 4. Daftar Varian Deterjen & Pewangi (Tanpa kurung siku agar aman di-copy)
+  // 4. Daftar Varian Deterjen & Pewangi
   final List _deterjenList = [
     {'name': 'Rinso Gentle', 'price': '1.000', 'isAvailable': true},
     {'name': 'Attack Higienis', 'price': '1.000', 'isAvailable': true},
@@ -64,14 +59,10 @@ class _ManageServicesPageState extends State<ManageServicesPage> {
 
   @override
   void dispose() {
-    _bannerTextController.dispose();
     _kiloanController.dispose();
     _satuanStartController.dispose();
     _bedCoverController.dispose();
     _bonekaController.dispose();
-    for (final c in _satuanItemControllers.values) {
-      c.dispose();
-    }
     _tarifMinKiloanController.dispose();
     _minBeratKiloanController.dispose();
     _expressController.dispose();
@@ -79,10 +70,102 @@ class _ManageServicesPageState extends State<ManageServicesPage> {
     super.dispose();
   }
 
-  // Pop-up Tambah Varian Baru (Deterjen / Pewangi)
-  void _showAddVariantDialog({required bool isDeterjen}) {
-    final nameController = TextEditingController();
-    final priceController = TextEditingController(text: '1.000');
+  // ==================== DIALOG KONFIRMASI HAPUS ====================
+  void _confirmDelete({
+    required String itemName,
+    required String categoryLabel,
+    required VoidCallback onConfirm,
+  }) {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        backgroundColor: Colors.white,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        title: Row(
+          children: [
+            const Icon(
+              Icons.warning_amber_rounded,
+              color: Color(0xFFEF4444),
+              size: 24,
+            ),
+            const SizedBox(width: 8),
+            Text(
+              'Konfirmasi Hapus',
+              style: GoogleFonts.poppins(
+                fontSize: 16,
+                fontWeight: FontWeight.w700,
+                color: const Color(0xFF1B4E6C),
+              ),
+            ),
+          ],
+        ),
+        content: Text(
+          'Apakah Anda yakin ingin menghapus "$itemName" dari daftar $categoryLabel?',
+          style: GoogleFonts.poppins(
+            fontSize: 12.5,
+            color: const Color(0xFF475569),
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: Text(
+              'Batal',
+              style: GoogleFonts.poppins(
+                fontWeight: FontWeight.w600,
+                color: const Color(0xFF64748B),
+              ),
+            ),
+          ),
+          ElevatedButton(
+            onPressed: () {
+              onConfirm();
+              Navigator.pop(context);
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(
+                  behavior: SnackBarBehavior.floating,
+                  backgroundColor: const Color(0xFFEF4444),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  content: Text(
+                    '"$itemName" berhasil dihapus',
+                    style: GoogleFonts.poppins(
+                      fontSize: 12,
+                      color: Colors.white,
+                    ),
+                  ),
+                ),
+              );
+            },
+            style: ElevatedButton.styleFrom(
+              backgroundColor: const Color(0xFFEF4444),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(12),
+              ),
+            ),
+            child: Text(
+              'Ya, Hapus',
+              style: GoogleFonts.poppins(
+                fontWeight: FontWeight.w600,
+                color: Colors.white,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // ==================== DIALOG TAMBAH & EDIT ITEM SATUAN ====================
+  void _showSatuanItemDialog({int? editIndex}) {
+    final bool isEdit = editIndex != null;
+    final nameController = TextEditingController(
+      text: isEdit ? _satuanItems[editIndex]['name'] : '',
+    );
+    final priceController = TextEditingController(
+      text: isEdit ? _satuanItems[editIndex]['price'] : '20.000',
+    );
 
     showDialog(
       context: context,
@@ -90,7 +173,146 @@ class _ManageServicesPageState extends State<ManageServicesPage> {
         backgroundColor: Colors.white,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
         title: Text(
-          isDeterjen ? 'Tambah Varian Deterjen' : 'Tambah Varian Pewangi',
+          isEdit ? 'Edit Item Satuan' : 'Tambah Item Satuan',
+          style: GoogleFonts.poppins(
+            fontSize: 16,
+            fontWeight: FontWeight.w700,
+            color: const Color(0xFF1B4E6C),
+          ),
+        ),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              'Nama Jenis Pakaian',
+              style: GoogleFonts.poppins(
+                fontSize: 11.5,
+                fontWeight: FontWeight.w600,
+                color: const Color(0xFF64748B),
+              ),
+            ),
+            const SizedBox(height: 6),
+            TextField(
+              controller: nameController,
+              textCapitalization: TextCapitalization.words,
+              style: GoogleFonts.poppins(fontSize: 13),
+              decoration: InputDecoration(
+                hintText: 'Contoh: Hoodie / Jaket',
+                hintStyle: GoogleFonts.poppins(
+                  fontSize: 12,
+                  color: const Color(0xFF94A3B8),
+                ),
+                contentPadding:
+                    const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(12),
+                ),
+              ),
+            ),
+            const SizedBox(height: 14),
+            Text(
+              'Tarif Mulai Dari (Rp / pcs)',
+              style: GoogleFonts.poppins(
+                fontSize: 11.5,
+                fontWeight: FontWeight.w600,
+                color: const Color(0xFF64748B),
+              ),
+            ),
+            const SizedBox(height: 6),
+            TextField(
+              controller: priceController,
+              keyboardType: TextInputType.number,
+              inputFormatters: [
+                FilteringTextInputFormatter.allow(RegExp(r'[0-9.]')),
+              ],
+              style: GoogleFonts.poppins(fontSize: 13),
+              decoration: InputDecoration(
+                prefixText: 'Rp ',
+                contentPadding:
+                    const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(12),
+                ),
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: Text(
+              'Batal',
+              style: GoogleFonts.poppins(
+                fontWeight: FontWeight.w600,
+                color: const Color(0xFF64748B),
+              ),
+            ),
+          ),
+          ElevatedButton(
+            onPressed: () {
+              final name = nameController.text.trim();
+              final price = priceController.text.trim().isEmpty
+                  ? '15.000'
+                  : priceController.text.trim();
+
+              if (name.isNotEmpty) {
+                setState(() {
+                  if (isEdit) {
+                    _satuanItems[editIndex]['name'] = name;
+                    _satuanItems[editIndex]['price'] = price;
+                  } else {
+                    _satuanItems.add({'name': name, 'price': price});
+                  }
+                });
+                Navigator.pop(context);
+              }
+            },
+            style: ElevatedButton.styleFrom(
+              backgroundColor: const Color(0xFF338CA8),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(12),
+              ),
+            ),
+            child: Text(
+              isEdit ? 'Simpan' : 'Tambah',
+              style: GoogleFonts.poppins(
+                fontWeight: FontWeight.w600,
+                color: Colors.white,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // ==================== DIALOG TAMBAH & EDIT DETERJEN / PEWANGI ====================
+  void _showVariantDialog({
+    required bool isDeterjen,
+    int? editIndex,
+  }) {
+    final bool isEdit = editIndex != null;
+    final targetList = isDeterjen ? _deterjenList : _pewangiList;
+
+    final nameController = TextEditingController(
+      text: isEdit ? targetList[editIndex]['name'] : '',
+    );
+    final priceController = TextEditingController(
+      text: isEdit ? targetList[editIndex]['price'] : '1.000',
+    );
+
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        backgroundColor: Colors.white,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        title: Text(
+          isEdit
+              ? (isDeterjen ? 'Edit Varian Deterjen' : 'Edit Varian Pewangi')
+              : (isDeterjen
+                  ? 'Tambah Varian Deterjen'
+                  : 'Tambah Varian Pewangi'),
           style: GoogleFonts.poppins(
             fontSize: 16,
             fontWeight: FontWeight.w700,
@@ -179,15 +401,15 @@ class _ManageServicesPageState extends State<ManageServicesPage> {
 
               if (name.isNotEmpty) {
                 setState(() {
-                  final newItem = {
-                    'name': name,
-                    'price': price,
-                    'isAvailable': true,
-                  };
-                  if (isDeterjen) {
-                    _deterjenList.add(newItem);
+                  if (isEdit) {
+                    targetList[editIndex]['name'] = name;
+                    targetList[editIndex]['price'] = price;
                   } else {
-                    _pewangiList.add(newItem);
+                    targetList.add({
+                      'name': name,
+                      'price': price,
+                      'isAvailable': true,
+                    });
                   }
                 });
                 Navigator.pop(context);
@@ -200,7 +422,7 @@ class _ManageServicesPageState extends State<ManageServicesPage> {
               ),
             ),
             child: Text(
-              'Tambah',
+              isEdit ? 'Simpan' : 'Tambah',
               style: GoogleFonts.poppins(
                 fontWeight: FontWeight.w600,
                 color: Colors.white,
@@ -229,6 +451,8 @@ class _ManageServicesPageState extends State<ManageServicesPage> {
 
   @override
   Widget build(BuildContext context) {
+    final int jumlahItemSatuan = _satuanItems.length;
+
     return GestureDetector(
       onTap: () => FocusScope.of(context).unfocus(),
       child: Scaffold(
@@ -281,7 +505,7 @@ class _ManageServicesPageState extends State<ManageServicesPage> {
                                     ),
                                   ),
                                   Text(
-                                    'Kelola tarif, stok varian, dan tampilan beranda',
+                                    'Kelola tarif, stok varian, dan jenis layanan',
                                     style: GoogleFonts.poppins(
                                       fontSize: 11,
                                       color: const Color(0xFF2E637E),
@@ -390,7 +614,8 @@ class _ManageServicesPageState extends State<ManageServicesPage> {
                             _buildServiceRateRow(
                               icon: Icons.checkroom_rounded,
                               title: 'Laundry Satuan',
-                              subtitle: 'Start from (8 jenis item)',
+                              subtitle:
+                                  'Start from ($jumlahItemSatuan jenis item)',
                               controller: _satuanStartController,
                               unit: 'Rp / pcs',
                             ),
@@ -412,7 +637,7 @@ class _ManageServicesPageState extends State<ManageServicesPage> {
                                 label: Text(
                                   _isSatuanExpanded
                                       ? 'Sembunyikan Rincian Item Satuan'
-                                      : 'Atur Harga per Item Satuan (8)',
+                                      : 'Kelola Item Satuan ($jumlahItemSatuan)',
                                   style: GoogleFonts.poppins(
                                     fontSize: 11,
                                     fontWeight: FontWeight.w600,
@@ -433,34 +658,156 @@ class _ManageServicesPageState extends State<ManageServicesPage> {
                                   ),
                                 ),
                                 child: Column(
-                                  children: _satuanItemControllers.entries
-                                      .map(
-                                        (entry) => Padding(
-                                          padding: const EdgeInsets.symmetric(
-                                            vertical: 5,
+                                  children: [
+                                    Row(
+                                      mainAxisAlignment:
+                                          MainAxisAlignment.spaceBetween,
+                                      children: [
+                                        Text(
+                                          'Daftar Pakaian Satuan',
+                                          style: GoogleFonts.poppins(
+                                            fontSize: 11.5,
+                                            fontWeight: FontWeight.w700,
+                                            color: const Color(0xFF1B4E6C),
                                           ),
-                                          child: Row(
-                                            mainAxisAlignment:
-                                                MainAxisAlignment.spaceBetween,
-                                            children: [
-                                              Text(
-                                                entry.key,
-                                                style: GoogleFonts.poppins(
-                                                  fontSize: 12,
-                                                  fontWeight: FontWeight.w600,
-                                                  color:
-                                                      const Color(0xFF334155),
-                                                ),
-                                              ),
-                                              _buildCompactPriceInput(
-                                                controller: entry.value,
-                                                unit: 'Rp / pcs',
-                                              ),
-                                            ],
+                                        ),
+                                        TextButton.icon(
+                                          onPressed: () =>
+                                              _showSatuanItemDialog(),
+                                          style: TextButton.styleFrom(
+                                            backgroundColor:
+                                                const Color(0xFFD6EFFB),
+                                            padding: const EdgeInsets.symmetric(
+                                              horizontal: 10,
+                                              vertical: 4,
+                                            ),
+                                            minimumSize: Size.zero,
+                                            tapTargetSize: MaterialTapTargetSize
+                                                .shrinkWrap,
+                                            shape: RoundedRectangleBorder(
+                                              borderRadius:
+                                                  BorderRadius.circular(16),
+                                            ),
+                                          ),
+                                          icon: const Icon(
+                                            Icons.add_rounded,
+                                            size: 15,
+                                            color: Color(0xFF1B4E6C),
+                                          ),
+                                          label: Text(
+                                            'Tambah Item',
+                                            style: GoogleFonts.poppins(
+                                              fontSize: 10.5,
+                                              fontWeight: FontWeight.w700,
+                                              color: const Color(0xFF1B4E6C),
+                                            ),
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                    const Divider(
+                                      height: 16,
+                                      color: Color(0xFFE2E8F0),
+                                    ),
+                                    if (_satuanItems.isEmpty)
+                                      Padding(
+                                        padding: const EdgeInsets.symmetric(
+                                          vertical: 10,
+                                        ),
+                                        child: Text(
+                                          'Belum ada item pakaian satuan',
+                                          style: GoogleFonts.poppins(
+                                            fontSize: 11.5,
+                                            color: const Color(0xFF94A3B8),
                                           ),
                                         ),
                                       )
-                                      .toList(),
+                                    else
+                                      ListView.separated(
+                                        shrinkWrap: true,
+                                        physics:
+                                            const NeverScrollableScrollPhysics(),
+                                        itemCount: _satuanItems.length,
+                                        separatorBuilder: (_, __) =>
+                                            const Divider(
+                                          height: 14,
+                                          color: Color(0xFFE2E8F0),
+                                        ),
+                                        itemBuilder: (context, index) {
+                                          final item = _satuanItems[index];
+                                          return Row(
+                                            children: [
+                                              Expanded(
+                                                child: Column(
+                                                  crossAxisAlignment:
+                                                      CrossAxisAlignment.start,
+                                                  children: [
+                                                    Text(
+                                                      item['name'],
+                                                      style:
+                                                          GoogleFonts.poppins(
+                                                        fontSize: 12.5,
+                                                        fontWeight:
+                                                            FontWeight.w600,
+                                                        color: const Color(
+                                                            0xFF1E293B),
+                                                      ),
+                                                    ),
+                                                    Text(
+                                                      'Mulai Rp ${item['price']} / pcs',
+                                                      style:
+                                                          GoogleFonts.poppins(
+                                                        fontSize: 10.5,
+                                                        color: const Color(
+                                                            0xFF64748B),
+                                                      ),
+                                                    ),
+                                                  ],
+                                                ),
+                                              ),
+                                              // Tombol Edit Nama & Harga
+                                              IconButton(
+                                                onPressed: () =>
+                                                    _showSatuanItemDialog(
+                                                  editIndex: index,
+                                                ),
+                                                icon: const Icon(
+                                                  Icons.edit_outlined,
+                                                  size: 19,
+                                                  color: Color(0xFF338CA8),
+                                                ),
+                                                padding: EdgeInsets.zero,
+                                                constraints:
+                                                    const BoxConstraints(),
+                                              ),
+                                              const SizedBox(width: 12),
+                                              // Tombol Hapus dengan Konfirmasi
+                                              IconButton(
+                                                onPressed: () => _confirmDelete(
+                                                  itemName: item['name'],
+                                                  categoryLabel:
+                                                      'Pakaian Satuan',
+                                                  onConfirm: () {
+                                                    setState(() {
+                                                      _satuanItems
+                                                          .removeAt(index);
+                                                    });
+                                                  },
+                                                ),
+                                                icon: const Icon(
+                                                  Icons.delete_outline_rounded,
+                                                  size: 19,
+                                                  color: Color(0xFFEF4444),
+                                                ),
+                                                padding: EdgeInsets.zero,
+                                                constraints:
+                                                    const BoxConstraints(),
+                                              ),
+                                            ],
+                                          );
+                                        },
+                                      ),
+                                  ],
                                 ),
                               ),
                             ],
@@ -486,7 +833,7 @@ class _ManageServicesPageState extends State<ManageServicesPage> {
 
                       const SizedBox(height: 24),
 
-                      // ================= 3. Varian Deterjen & Pewangi (Stok & Tambah) =================
+                      // ================= 3. Varian Deterjen & Pewangi (CRUD + Stok) =================
                       Row(
                         mainAxisAlignment: MainAxisAlignment.spaceBetween,
                         children: [
@@ -499,7 +846,7 @@ class _ManageServicesPageState extends State<ManageServicesPage> {
                             ),
                           ),
                           Text(
-                            'Stok & Harga',
+                            'Edit, Stok & Hapus',
                             style: GoogleFonts.poppins(
                               fontSize: 11,
                               color: const Color(0xFF64748B),
@@ -512,10 +859,14 @@ class _ManageServicesPageState extends State<ManageServicesPage> {
                       // Card Pilihan Deterjen
                       _buildVariantCard(
                         title: 'Pilihan Deterjen',
+                        categoryLabel: 'Varian Deterjen',
                         icon: Icons.cleaning_services_rounded,
                         items: _deterjenList,
-                        onAddPressed: () =>
-                            _showAddVariantDialog(isDeterjen: true),
+                        onAddPressed: () => _showVariantDialog(isDeterjen: true),
+                        onEditPressed: (index) => _showVariantDialog(
+                          isDeterjen: true,
+                          editIndex: index,
+                        ),
                       ),
 
                       const SizedBox(height: 14),
@@ -523,10 +874,15 @@ class _ManageServicesPageState extends State<ManageServicesPage> {
                       // Card Pilihan Pewangi
                       _buildVariantCard(
                         title: 'Pilihan Pewangi',
+                        categoryLabel: 'Varian Pewangi',
                         icon: Icons.local_florist_rounded,
                         items: _pewangiList,
                         onAddPressed: () =>
-                            _showAddVariantDialog(isDeterjen: false),
+                            _showVariantDialog(isDeterjen: false),
+                        onEditPressed: (index) => _showVariantDialog(
+                          isDeterjen: false,
+                          editIndex: index,
+                        ),
                       ),
 
                       const SizedBox(height: 24),
@@ -637,12 +993,14 @@ class _ManageServicesPageState extends State<ManageServicesPage> {
     );
   }
 
-  // Widget Card Kelola Varian Deterjen & Pewangi
+  // Widget Card Kelola Varian Deterjen & Pewangi (Full CRUD + Konfirmasi Hapus)
   Widget _buildVariantCard({
     required String title,
+    required String categoryLabel,
     required IconData icon,
     required List items,
     required VoidCallback onAddPressed,
+    required Function(int) onEditPressed,
   }) {
     return Container(
       padding: const EdgeInsets.all(16),
@@ -801,13 +1159,30 @@ class _ManageServicesPageState extends State<ManageServicesPage> {
                         });
                       },
                     ),
-                    // Tombol Hapus Varian
+                    const SizedBox(width: 4),
+                    // Tombol Edit Nama & Harga Varian
                     IconButton(
-                      onPressed: () {
-                        setState(() {
-                          items.removeAt(index);
-                        });
-                      },
+                      onPressed: () => onEditPressed(index),
+                      icon: const Icon(
+                        Icons.edit_outlined,
+                        size: 19,
+                        color: Color(0xFF338CA8),
+                      ),
+                      padding: EdgeInsets.zero,
+                      constraints: const BoxConstraints(),
+                    ),
+                    const SizedBox(width: 10),
+                    // Tombol Hapus Varian dengan Konfirmasi
+                    IconButton(
+                      onPressed: () => _confirmDelete(
+                        itemName: item['name'],
+                        categoryLabel: categoryLabel,
+                        onConfirm: () {
+                          setState(() {
+                            items.removeAt(index);
+                          });
+                        },
+                      ),
                       icon: const Icon(
                         Icons.delete_outline_rounded,
                         size: 20,
@@ -909,9 +1284,9 @@ class _ManageServicesPageState extends State<ManageServicesPage> {
     required String unit,
   }) {
     return Container(
-      width: 126,
+      width: 118,
       height: 36,
-      padding: const EdgeInsets.symmetric(horizontal: 10),
+      padding: const EdgeInsets.symmetric(horizontal: 8),
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(10),

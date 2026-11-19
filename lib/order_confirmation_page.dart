@@ -1,36 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 
-// ---------------------------------------------------------------------------
-// Halaman Konfirmasi Pesanan
-// Letakkan di: lib/order_confirmation_page.dart
-//
-// Cara membuka dari halaman "Buat Pesanan" (tombol Lanjutkan):
-//
-//   Navigator.pushNamed(
-//     context,
-//     '/order-confirmation',
-//     arguments: OrderSummary(
-//       jenisLaundry: 'Kiloan',
-//       kecepatan: 'Express',
-//       pengerjaan: 'Cuci + Setrika',
-//       deterjen: 'Deterjen A',
-//       pewangi: 'Pewangi A',
-//       metode: 'Penjemputan',
-//       jadwal: '22 Oktober 2026 - 08.00',
-//       alamat: 'Jl. Contoh No. 1',
-//       biaya: [
-//         CostItem('Tarif minimum kiloan (7kg)', 'Rp20.000'),
-//         CostItem('Biaya Express', 'Rp5.000'),
-//       ],
-//       subtotal: 'Rp25.000',
-//     ),
-//   );
-//
-// Kalau dibuka tanpa arguments (misalnya untuk testing), halaman memakai
-// data contoh sesuai wireframe.
-// ---------------------------------------------------------------------------
-
 class _C {
   static const headerBlue = Color(0xFFD6EFFB);
   static const navy = Color(0xFF1F3A6E);
@@ -68,28 +38,20 @@ class OrderSummary {
     required this.metode,
     required this.jadwal,
     required this.alamat,
-    required this.biaya,
-    required this.subtotal,
+    this.biaya = const [],
+    this.subtotal = '',
   });
 
-  /// Data contoh sesuai wireframe.
+  /// Data contoh jika halaman dibuka tanpa arguments.
   static const OrderSummary dummy = OrderSummary(
     jenisLaundry: 'Kiloan',
     kecepatan: 'Express',
     pengerjaan: 'Cuci + Setrika',
-    deterjen: 'Deterjen A',
-    pewangi: 'Pewangi A',
-    metode: 'Penjemputan',
+    deterjen: 'Rinso Gentle',
+    pewangi: 'Molto Floral',
+    metode: 'Jemput: Penjemputan • Kirim: Diantar Kurir',
     jadwal: '22 Oktober 2026 - 08.00',
-    alamat: 'xxxxxxx',
-    biaya: [
-      CostItem('Tarif minimum kiloan (7kg)', 'Rp20.000'),
-      CostItem('Biaya Express', 'Rpxxxxxx'),
-      CostItem('Cuci + Setrika', 'Rpxxxxxx'),
-      CostItem('Tambahan Deterjen', 'Rp1.000'),
-      CostItem('Tambahan Pewangi', 'Rp1.000'),
-    ],
-    subtotal: 'Rp2xxxx',
+    alamat: 'Jl. Ketintang Baru No. 12, Surabaya',
   );
 }
 
@@ -113,8 +75,8 @@ class OrderConfirmationPage extends StatelessWidget {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   _buildDetailSection(summary),
-                  const SizedBox(height: 24),
-                  _buildCostSection(summary),
+                  const SizedBox(height: 16),
+                  _buildInfoNote(),
                 ],
               ),
             ),
@@ -205,101 +167,34 @@ class OrderConfirmationPage extends StatelessWidget {
     );
   }
 
-  // ---- Estimasi biaya -----------------------------------------------------
-  Widget _buildCostSection(OrderSummary s) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(
-          'Estimasi Biaya',
-          style: GoogleFonts.poppins(
-            fontSize: 15,
-            fontWeight: FontWeight.w700,
-            color: _C.navy,
-          ),
-        ),
-        const SizedBox(height: 8),
-        Container(
-          width: double.infinity,
-          padding: const EdgeInsets.fromLTRB(10, 8, 10, 8),
-          decoration: BoxDecoration(
-            color: Colors.white,
-            borderRadius: BorderRadius.circular(6),
-            border: Border.all(color: _C.border),
-          ),
-          child: Column(
-            children: [
-              for (final item in s.biaya)
-                Padding(
-                  padding: const EdgeInsets.symmetric(vertical: 2),
-                  child: Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      Expanded(
-                        child: Text(
-                          item.label,
-                          style: GoogleFonts.poppins(
-                              fontSize: 11, color: _C.navy),
-                        ),
-                      ),
-                      Text(
-                        item.amount,
-                        style: GoogleFonts.poppins(
-                            fontSize: 11, color: _C.navy),
-                      ),
-                    ],
-                  ),
-                ),
-            ],
-          ),
-        ),
-        const SizedBox(height: 14),
-        Row(
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-          children: [
-            Text(
-              'Estimasi Subtotal',
+  // ---- Informasi Konfirmasi Tagihan ---------------------------------------
+  Widget _buildInfoNote() {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+      decoration: BoxDecoration(
+        color: _C.infoBg,
+        borderRadius: BorderRadius.circular(6),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.center,
+        children: [
+          const Icon(Icons.info_outline_rounded,
+              size: 24, color: _C.infoIcon),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Text(
+              'Total tagihan akan dikonfirmasi setelah cucian diperiksa '
+              'oleh pihak laundry',
               style: GoogleFonts.poppins(
-                fontSize: 15,
-                fontWeight: FontWeight.w700,
+                fontSize: 11,
+                fontWeight: FontWeight.w500,
                 color: _C.navy,
               ),
             ),
-            Text(
-              s.subtotal,
-              style: GoogleFonts.poppins(
-                fontSize: 14,
-                fontWeight: FontWeight.w700,
-                color: _C.navy,
-              ),
-            ),
-          ],
-        ),
-        const SizedBox(height: 12),
-        Container(
-          width: double.infinity,
-          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-          decoration: BoxDecoration(
-            color: _C.infoBg,
-            borderRadius: BorderRadius.circular(6),
           ),
-          child: Row(
-            crossAxisAlignment: CrossAxisAlignment.center,
-            children: [
-              const Icon(Icons.info_outline_rounded,
-                  size: 26, color: _C.infoIcon),
-              const SizedBox(width: 8),
-              Expanded(
-                child: Text(
-                  'Total tagihan akan dikonfirmasi setelah cucian ditimbang '
-                  'oleh pihak laundry',
-                  style: GoogleFonts.poppins(fontSize: 10.5, color: _C.navy),
-                ),
-              ),
-            ],
-          ),
-        ),
-      ],
+        ],
+      ),
     );
   }
 
@@ -352,7 +247,6 @@ class OrderConfirmationPage extends StatelessWidget {
                     ),
                   ),
                 );
-                // TODO: simpan pesanan ke data/riwayat bila sudah ada backend.
                 Navigator.pushNamedAndRemoveUntil(
                   context,
                   '/home',
