@@ -11,11 +11,13 @@ class ManageOrdersPage extends StatefulWidget {
 }
 
 class AdminOrderModel {
-  final String dbId; // UUID primary key di tabel orders
-  final String? userId; // UUID pelanggan untuk keperluan notifikasi
-  final String id; // order_code (misal: #LKN4wa123)
+  final String dbId;
+  final String? userId;
+  final String id;
   final String customerName;
   final String orderDate;
+  final String pickupMethod;
+  final String deliveryMethod;
   final OrderSummary summary;
   String status;
   String finalPrice;
@@ -28,6 +30,8 @@ class AdminOrderModel {
     required this.id,
     required this.customerName,
     required this.orderDate,
+    required this.pickupMethod,
+    required this.deliveryMethod,
     required this.summary,
     required this.status,
     required this.finalPrice,
@@ -41,14 +45,22 @@ class AdminOrderModel {
     final String serviceName = (map['service_name'] ?? 'Laundry').toString();
     final String speed = (map['speed'] ?? 'Reguler').toString();
     final String treatment = (map['treatment'] ?? 'Cuci Saja').toString();
-    final String detergent = (map['detergent_name'] ?? 'Standar / Bawa Sendiri').toString();
-    final String perfume = (map['perfume_name'] ?? 'Standar / Bawa Sendiri').toString();
-    final String pickup = (map['pickup_method'] ?? 'Antar Sendiri').toString();
-    final String delivery = (map['delivery_method'] ?? 'Ambil Sendiri').toString();
+    final String detergent =
+        (map['detergent_name'] ?? 'Standar / Bawa Sendiri').toString();
+    final String perfume =
+        (map['perfume_name'] ?? 'Standar / Bawa Sendiri').toString();
+    final String pickup = (map['pickup_method'] ?? 'Penjemputan').toString();
+    final String delivery =
+        (map['delivery_method'] ?? 'Diantar Kurir').toString();
     final String schedule = (map['pickup_schedule'] ?? '-').toString();
     final String address = (map['address'] ?? '-').toString();
     final String weightOrQty = (map['weight_or_qty'] ?? '').toString();
-    final String status = (map['status'] ?? 'Penjemputan').toString();
+
+    final String defaultStatus =
+        pickup.toLowerCase().contains('antar sendiri')
+            ? 'Pesanan Masuk'
+            : 'Penjemputan';
+    final String status = (map['status'] ?? defaultStatus).toString();
 
     final int totalInt = (map['total_price'] is num)
         ? (map['total_price'] as num).toInt()
@@ -56,7 +68,6 @@ class AdminOrderModel {
 
     final String formattedPrice = _formatRupiah(totalInt);
 
-    // Format tanggal created_at
     String formattedDate = '-';
     if (map['created_at'] != null) {
       final dt = DateTime.tryParse(map['created_at'].toString())?.toLocal();
@@ -67,12 +78,14 @@ class AdminOrderModel {
         ];
         final hour = dt.hour.toString().padLeft(2, '0');
         final minute = dt.minute.toString().padLeft(2, '0');
-        formattedDate = '${dt.day} ${months[dt.month - 1]} ${dt.year}, $hour:$minute WIB';
+        formattedDate =
+            '${dt.day} ${months[dt.month - 1]} ${dt.year}, $hour:$minute WIB';
       }
     }
 
-    // Harga dianggap terkunci jika sudah melewati tahap Penjemputan & Konfirmasi Harga
-    final bool locked = status != 'Penjemputan' && status != 'Konfirmasi Harga';
+    final bool locked = status != 'Penjemputan' &&
+        status != 'Pesanan Masuk' &&
+        status != 'Konfirmasi Harga';
 
     return AdminOrderModel(
       dbId: map['id'].toString(),
@@ -80,12 +93,15 @@ class AdminOrderModel {
       id: orderCode,
       customerName: custName,
       orderDate: formattedDate,
+      pickupMethod: pickup,
+      deliveryMethod: delivery,
       status: status,
       finalPrice: formattedPrice,
       numericPrice: totalInt,
       isPriceLocked: locked,
       summary: OrderSummary(
-        jenisLaundry: weightOrQty.isNotEmpty ? '$serviceName ($weightOrQty)' : serviceName,
+        jenisLaundry:
+            weightOrQty.isNotEmpty ? '$serviceName ($weightOrQty)' : serviceName,
         kecepatan: speed,
         pengerjaan: treatment,
         deterjen: detergent,
@@ -127,17 +143,14 @@ class _ManageOrdersPageState extends State<ManageOrdersPage> {
   bool _isLoading = true;
   List<AdminOrderModel> _orders = [];
 
-  final List<String> _statusSequence = [
-    'Penjemputan',
+  // Urutan tahap proses di outlet
+  final List<String> _mainSequence = [
     'Konfirmasi Harga',
     'Menunggu Pembayaran',
     'Waiting',
     'Pencucian',
     'Pengeringan',
     'Penyetrikaan',
-    'Pengantaran',
-    'Menunggu Pengambilan',
-    'Selesai',
   ];
 
   @override
@@ -157,7 +170,6 @@ class _ManageOrdersPageState extends State<ManageOrdersPage> {
     super.dispose();
   }
 
-  // Ambil daftar pesanan dari Supabase
   Future<void> _fetchOrders() async {
     setState(() => _isLoading = true);
     try {
@@ -189,19 +201,18 @@ class _ManageOrdersPageState extends State<ManageOrdersPage> {
     }
   }
 
-  // Simpan notifikasi perubahan status ke tabel notifications (opsional jika tabel tersedia)
-  Future<void> _sendStatusNotification(AdminOrderModel order, String newStatus) async {
+  Future<void> _sendStatusNotification(
+      AdminOrderModel order, String newStatus) async {
     try {
       await _supabase.from('notifications').insert({
         if (order.userId != null) 'user_id': order.userId,
         'order_code': order.id,
         'title': newStatus,
-        'message': 'Status pesanan ${order.id} (${order.summary.jenisLaundry}) diperbarui menjadi $newStatus.',
+        'message':
+            'Status pesanan ${order.id} (${order.summary.jenisLaundry}) diperbarui menjadi $newStatus.',
         'is_read': false,
       });
-    } catch (_) {
-      // Diabaikan jika tabel notifications belum dibuat di Supabase
-    }
+    } catch (_) {}
   }
 
   List<AdminOrderModel> get _filteredOrders {
@@ -213,12 +224,6 @@ class _ManageOrdersPageState extends State<ManageOrdersPage> {
               o.status == 'Pencucian' ||
               o.status == 'Pengeringan' ||
               o.status == 'Penyetrikaan')
-          .toList();
-    } else if (_activeFilter == 'Penyerahan Pesanan') {
-      results = results
-          .where((o) =>
-              o.status == 'Pengantaran' ||
-              o.status == 'Menunggu Pengambilan')
           .toList();
     } else if (_activeFilter != 'Semua') {
       results = results.where((o) => o.status == _activeFilter).toList();
@@ -238,22 +243,24 @@ class _ManageOrdersPageState extends State<ManageOrdersPage> {
   Future<void> _advanceStatus(AdminOrderModel order) async {
     String nextStatus = order.status;
 
-    if (order.status == 'Penyetrikaan') {
-      final bool isDelivery = order.summary.metode.toLowerCase().contains('diantar kurir') ||
-          order.summary.metode.toLowerCase().contains('kurir');
+    if (order.status == 'Penjemputan' || order.status == 'Pesanan Masuk') {
+      nextStatus = 'Konfirmasi Harga';
+    } else if (order.status == 'Penyetrikaan') {
+      final bool isDelivery =
+          order.deliveryMethod.toLowerCase().contains('diantar kurir');
       nextStatus = isDelivery ? 'Pengantaran' : 'Menunggu Pengambilan';
-    } else if (order.status == 'Pengantaran' || order.status == 'Menunggu Pengambilan') {
+    } else if (order.status == 'Pengantaran' ||
+        order.status == 'Menunggu Pengambilan') {
       nextStatus = 'Selesai';
     } else {
-      final int currentIndex = _statusSequence.indexOf(order.status);
-      if (currentIndex != -1 && currentIndex < _statusSequence.length - 1) {
-        nextStatus = _statusSequence[currentIndex + 1];
+      final int idx = _mainSequence.indexOf(order.status);
+      if (idx != -1 && idx < _mainSequence.length - 1) {
+        nextStatus = _mainSequence[idx + 1];
       } else {
         return;
       }
     }
 
-    // Jika baru melewati tahap 'Menunggu Pembayaran', otomatis tandai payment_status = 'Lunas'
     final Map<String, dynamic> updatePayload = {'status': nextStatus};
     if (order.status == 'Menunggu Pembayaran') {
       updatePayload['payment_status'] = 'Lunas';
@@ -270,7 +277,9 @@ class _ManageOrdersPageState extends State<ManageOrdersPage> {
       if (!mounted) return;
       setState(() {
         order.status = nextStatus;
-        if (_statusSequence.indexOf(order.status) >= 2) {
+        if (order.status != 'Penjemputan' &&
+            order.status != 'Pesanan Masuk' &&
+            order.status != 'Konfirmasi Harga') {
           order.isPriceLocked = true;
         }
       });
@@ -304,8 +313,8 @@ class _ManageOrdersPageState extends State<ManageOrdersPage> {
   }
 
   void _showConfirmPriceDialog(AdminOrderModel order) {
-    final TextEditingController priceController =
-        TextEditingController(text: order.numericPrice > 0 ? order.numericPrice.toString() : '');
+    final TextEditingController priceController = TextEditingController(
+        text: order.numericPrice > 0 ? order.numericPrice.toString() : '');
 
     showDialog(
       context: context,
@@ -314,7 +323,9 @@ class _ManageOrdersPageState extends State<ManageOrdersPage> {
           title: Text(
             'Konfirmasi Harga (${order.id})',
             style: GoogleFonts.poppins(
-                fontSize: 14, fontWeight: FontWeight.w700, color: const Color(0xFF1F3A6E)),
+                fontSize: 14,
+                fontWeight: FontWeight.w700,
+                color: const Color(0xFF1F3A6E)),
           ),
           content: Column(
             mainAxisSize: MainAxisSize.min,
@@ -322,7 +333,8 @@ class _ManageOrdersPageState extends State<ManageOrdersPage> {
             children: [
               Text(
                 'Masukkan harga final (angka saja, misal: 35000). Setelah dikonfirmasi, harga dikunci dan pesanan dilanjutkan ke tahap pembayaran.',
-                style: GoogleFonts.poppins(fontSize: 11.5, color: Colors.grey.shade700),
+                style: GoogleFonts.poppins(
+                    fontSize: 11.5, color: Colors.grey.shade700),
               ),
               const SizedBox(height: 12),
               TextField(
@@ -332,7 +344,8 @@ class _ManageOrdersPageState extends State<ManageOrdersPage> {
                   labelText: 'Harga Final (Rp)',
                   hintText: 'Contoh: 35000',
                   labelStyle: GoogleFonts.poppins(fontSize: 12),
-                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+                  border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(8)),
                 ),
                 style: GoogleFonts.poppins(fontSize: 13),
               ),
@@ -341,12 +354,15 @@ class _ManageOrdersPageState extends State<ManageOrdersPage> {
           actions: [
             TextButton(
               onPressed: () => Navigator.pop(dialogContext),
-              child: Text('Batal', style: GoogleFonts.poppins(color: Colors.grey.shade700)),
+              child: Text('Batal',
+                  style: GoogleFonts.poppins(color: Colors.grey.shade700)),
             ),
             ElevatedButton(
-              style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF1F3A6E)),
+              style: ElevatedButton.styleFrom(
+                  backgroundColor: const Color(0xFF1F3A6E)),
               onPressed: () async {
-                final digitsOnly = priceController.text.replaceAll(RegExp(r'[^0-9]'), '');
+                final digitsOnly =
+                    priceController.text.replaceAll(RegExp(r'[^0-9]'), '');
                 final int parsedPrice = int.tryParse(digitsOnly) ?? 0;
 
                 if (parsedPrice <= 0) {
@@ -355,7 +371,8 @@ class _ManageOrdersPageState extends State<ManageOrdersPage> {
                       backgroundColor: Colors.red.shade700,
                       content: Text(
                         'Masukkan nominal harga yang valid!',
-                        style: GoogleFonts.poppins(fontSize: 12, color: Colors.white),
+                        style: GoogleFonts.poppins(
+                            fontSize: 12, color: Colors.white),
                       ),
                     ),
                   );
@@ -375,7 +392,8 @@ class _ManageOrdersPageState extends State<ManageOrdersPage> {
 
                   setState(() {
                     order.numericPrice = parsedPrice;
-                    order.finalPrice = AdminOrderModel._formatRupiah(parsedPrice);
+                    order.finalPrice =
+                        AdminOrderModel._formatRupiah(parsedPrice);
                     order.isPriceLocked = true;
                     order.status = 'Menunggu Pembayaran';
                   });
@@ -386,7 +404,8 @@ class _ManageOrdersPageState extends State<ManageOrdersPage> {
                       duration: const Duration(seconds: 1),
                       content: Text(
                         'Harga dikonfirmasi (${order.finalPrice}) dan dikunci.',
-                        style: GoogleFonts.poppins(fontSize: 12, color: Colors.white),
+                        style: GoogleFonts.poppins(
+                            fontSize: 12, color: Colors.white),
                       ),
                     ),
                   );
@@ -397,7 +416,8 @@ class _ManageOrdersPageState extends State<ManageOrdersPage> {
                       backgroundColor: Colors.red.shade700,
                       content: Text(
                         'Gagal menyimpan harga: $e',
-                        style: GoogleFonts.poppins(fontSize: 12, color: Colors.white),
+                        style: GoogleFonts.poppins(
+                            fontSize: 12, color: Colors.white),
                       ),
                     ),
                   );
@@ -413,18 +433,21 @@ class _ManageOrdersPageState extends State<ManageOrdersPage> {
   }
 
   void _showDetailDialog(AdminOrderModel order) {
-    bool isPickUp = order.summary.metode.toLowerCase().contains('penjemputan');
+    bool isPickUp = order.pickupMethod.toLowerCase().contains('penjemputan');
     bool showPickUpSection = isPickUp && order.status == 'Penjemputan';
 
     showDialog(
       context: context,
       builder: (context) {
         return AlertDialog(
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+          shape:
+              RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
           title: Text(
             'Detail Pesanan (${order.id})',
             style: GoogleFonts.poppins(
-                fontSize: 15, fontWeight: FontWeight.w700, color: const Color(0xFF1F3A6E)),
+                fontSize: 15,
+                fontWeight: FontWeight.w700,
+                color: const Color(0xFF1F3A6E)),
           ),
           content: SizedBox(
             width: double.maxFinite,
@@ -434,15 +457,18 @@ class _ManageOrdersPageState extends State<ManageOrdersPage> {
                 mainAxisSize: MainAxisSize.min,
                 children: [
                   Text('Pelanggan: ${order.customerName}',
-                      style: GoogleFonts.poppins(fontSize: 12.5, fontWeight: FontWeight.w600)),
+                      style: GoogleFonts.poppins(
+                          fontSize: 12.5, fontWeight: FontWeight.w600)),
                   Text('Tanggal: ${order.orderDate}',
-                      style: GoogleFonts.poppins(fontSize: 11, color: Colors.grey.shade600)),
+                      style: GoogleFonts.poppins(
+                          fontSize: 11, color: Colors.grey.shade600)),
                   const Divider(height: 16),
                   if (showPickUpSection) ...[
                     Container(
                       padding: const EdgeInsets.all(8),
                       decoration: BoxDecoration(
-                          color: const Color(0xFFFFFBEB), borderRadius: BorderRadius.circular(8)),
+                          color: const Color(0xFFFFFBEB),
+                          borderRadius: BorderRadius.circular(8)),
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
@@ -475,7 +501,8 @@ class _ManageOrdersPageState extends State<ManageOrdersPage> {
                         padding: const EdgeInsets.only(bottom: 2),
                         child: Text(
                           item.toString(),
-                          style: GoogleFonts.poppins(fontSize: 11, color: Colors.grey.shade700),
+                          style: GoogleFonts.poppins(
+                              fontSize: 11, color: Colors.grey.shade700),
                         ),
                       )),
                   const Divider(height: 16),
@@ -483,7 +510,8 @@ class _ManageOrdersPageState extends State<ManageOrdersPage> {
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
                       Text('Harga Final:',
-                          style: GoogleFonts.poppins(fontSize: 12, fontWeight: FontWeight.w700)),
+                          style: GoogleFonts.poppins(
+                              fontSize: 12, fontWeight: FontWeight.w700)),
                       Text(order.finalPrice,
                           style: GoogleFonts.poppins(
                               fontSize: 13,
@@ -498,7 +526,8 @@ class _ManageOrdersPageState extends State<ManageOrdersPage> {
           actions: [
             TextButton(
               onPressed: () => Navigator.pop(context),
-              child: Text('Tutup', style: GoogleFonts.poppins(color: const Color(0xFF1F3A6E))),
+              child: Text('Tutup',
+                  style: GoogleFonts.poppins(color: const Color(0xFF1F3A6E))),
             ),
           ],
         );
@@ -515,7 +544,8 @@ class _ManageOrdersPageState extends State<ManageOrdersPage> {
         elevation: 0,
         centerTitle: true,
         leading: IconButton(
-          icon: const Icon(Icons.arrow_back_ios_new, color: Color(0xFF1F3A6E), size: 20),
+          icon: const Icon(Icons.arrow_back_ios_new,
+              color: Color(0xFF1F3A6E), size: 20),
           onPressed: () => Navigator.pop(context),
         ),
         title: Text(
@@ -543,17 +573,21 @@ class _ManageOrdersPageState extends State<ManageOrdersPage> {
               controller: _searchController,
               decoration: InputDecoration(
                 hintText: 'Cari ID Pesanan atau Nama Cust...',
-                hintStyle: GoogleFonts.poppins(fontSize: 12.5, color: Colors.grey.shade500),
-                prefixIcon: const Icon(Icons.search, color: Color(0xFF1F3A6E), size: 20),
+                hintStyle: GoogleFonts.poppins(
+                    fontSize: 12.5, color: Colors.grey.shade500),
+                prefixIcon: const Icon(Icons.search,
+                    color: Color(0xFF1F3A6E), size: 20),
                 filled: true,
                 fillColor: Colors.white,
-                contentPadding: const EdgeInsets.symmetric(vertical: 0, horizontal: 16),
+                contentPadding:
+                    const EdgeInsets.symmetric(vertical: 0, horizontal: 16),
                 border: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(24),
                   borderSide: BorderSide.none,
                 ),
               ),
-              style: GoogleFonts.poppins(fontSize: 13, color: const Color(0xFF1F3A6E)),
+              style: GoogleFonts.poppins(
+                  fontSize: 13, color: const Color(0xFF1F3A6E)),
             ),
           ),
           Container(
@@ -565,11 +599,13 @@ class _ManageOrdersPageState extends State<ManageOrdersPage> {
                 children: [
                   'Semua',
                   'Penjemputan',
+                  'Pesanan Masuk',
                   'Konfirmasi Harga',
                   'Menunggu Pembayaran',
                   'Waiting',
                   'Diproses',
-                  'Penyerahan Pesanan',
+                  'Pengantaran',
+                  'Menunggu Pengambilan',
                   'Selesai'
                 ].map((filter) {
                   final isSelected = _activeFilter == filter;
@@ -582,8 +618,10 @@ class _ManageOrdersPageState extends State<ManageOrdersPage> {
                       backgroundColor: Colors.white,
                       labelStyle: GoogleFonts.poppins(
                         fontSize: 11,
-                        fontWeight: isSelected ? FontWeight.w600 : FontWeight.w400,
-                        color: isSelected ? Colors.white : const Color(0xFF1F3A6E),
+                        fontWeight:
+                            isSelected ? FontWeight.w600 : FontWeight.w400,
+                        color:
+                            isSelected ? Colors.white : const Color(0xFF1F3A6E),
                       ),
                       onSelected: (selected) {
                         if (selected) setState(() => _activeFilter = filter);
@@ -606,12 +644,14 @@ class _ManageOrdersPageState extends State<ManageOrdersPage> {
                         ? ListView(
                             children: [
                               SizedBox(
-                                height: MediaQuery.of(context).size.height * 0.5,
+                                height:
+                                    MediaQuery.of(context).size.height * 0.5,
                                 child: Center(
                                   child: Text(
                                     'Tidak ada pesanan yang sesuai',
                                     style: GoogleFonts.poppins(
-                                        fontSize: 13, color: const Color(0xFF64748B)),
+                                        fontSize: 13,
+                                        color: const Color(0xFF64748B)),
                                   ),
                                 ),
                               ),
@@ -635,10 +675,13 @@ class _ManageOrdersPageState extends State<ManageOrdersPage> {
   Widget _buildAdminOrderCard(AdminOrderModel order) {
     String buttonText = 'Lanjut Tahap Berikutnya ➔';
     if (order.status == 'Penjemputan') {
-      buttonText = 'Selesai';
+      buttonText = 'Selesai Jemput ➔';
+    } else if (order.status == 'Pesanan Masuk') {
+      buttonText = 'Cucian Diterima ➔';
     } else if (order.status == 'Menunggu Pembayaran') {
       buttonText = 'Konfirmasi Pembayaran ➔';
-    } else if (order.status == 'Pengantaran' || order.status == 'Menunggu Pengambilan') {
+    } else if (order.status == 'Pengantaran' ||
+        order.status == 'Menunggu Pengambilan') {
       buttonText = 'Selesai';
     }
 
@@ -678,12 +721,14 @@ class _ManageOrdersPageState extends State<ManageOrdersPage> {
                     const SizedBox(height: 1),
                     Text(
                       order.orderDate,
-                      style: GoogleFonts.poppins(fontSize: 10.5, color: Colors.grey.shade600),
+                      style: GoogleFonts.poppins(
+                          fontSize: 10.5, color: Colors.grey.shade600),
                     ),
                   ],
                 ),
                 Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                   decoration: BoxDecoration(
                     color: const Color(0xFFE3EEF3),
                     borderRadius: BorderRadius.circular(20),
@@ -722,7 +767,8 @@ class _ManageOrdersPageState extends State<ManageOrdersPage> {
                       const SizedBox(height: 2),
                       Text(
                         'Pelanggan: ${order.customerName}',
-                        style: GoogleFonts.poppins(fontSize: 11.5, color: Colors.grey.shade600),
+                        style: GoogleFonts.poppins(
+                            fontSize: 11.5, color: Colors.grey.shade600),
                       ),
                     ],
                   ),
@@ -732,7 +778,8 @@ class _ManageOrdersPageState extends State<ManageOrdersPage> {
                   children: [
                     Text(
                       'Total Biaya',
-                      style: GoogleFonts.poppins(fontSize: 10, color: Colors.grey.shade600),
+                      style: GoogleFonts.poppins(
+                          fontSize: 10, color: Colors.grey.shade600),
                     ),
                     Text(
                       order.finalPrice,
@@ -757,49 +804,60 @@ class _ManageOrdersPageState extends State<ManageOrdersPage> {
                   onPressed: () => _showDetailDialog(order),
                   style: TextButton.styleFrom(
                     backgroundColor: const Color(0xFFE2E8F0),
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                    shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(8)),
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
                   ),
                   child: Text(
                     'Detail Pesanan',
                     style: GoogleFonts.poppins(
-                        fontSize: 11, fontWeight: FontWeight.w600, color: const Color(0xFF334155)),
+                        fontSize: 11,
+                        fontWeight: FontWeight.w600,
+                        color: const Color(0xFF334155)),
                   ),
                 ),
                 Row(
                   children: [
-                    if (!order.isPriceLocked && order.status == 'Konfirmasi Harga')
+                    if (!order.isPriceLocked &&
+                        order.status == 'Konfirmasi Harga')
                       TextButton.icon(
                         onPressed: () => _showConfirmPriceDialog(order),
                         icon: const Icon(Icons.check_circle_outline,
                             size: 14, color: Color(0xFF263F73)),
                         label: Text('Kunci Harga',
-                            style:
-                                GoogleFonts.poppins(fontSize: 10, color: const Color(0xFF263F73))),
+                            style: GoogleFonts.poppins(
+                                fontSize: 10, color: const Color(0xFF263F73))),
                         style: TextButton.styleFrom(
                             padding: const EdgeInsets.symmetric(horizontal: 8)),
                       ),
                     const SizedBox(width: 6),
                     if (order.status != 'Selesai')
                       ElevatedButton(
-                        onPressed: (!order.isPriceLocked && order.status == 'Konfirmasi Harga')
+                        onPressed: (!order.isPriceLocked &&
+                                order.status == 'Konfirmasi Harga')
                             ? null
                             : () => _advanceStatus(order),
                         style: ElevatedButton.styleFrom(
                           backgroundColor: const Color(0xFF1F3A6E),
                           elevation: 0,
-                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                          shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(8)),
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 12, vertical: 6),
                         ),
                         child: Text(
                           buttonText,
                           style: GoogleFonts.poppins(
-                              fontSize: 11, color: Colors.white, fontWeight: FontWeight.w600),
+                              fontSize: 11,
+                              color: Colors.white,
+                              fontWeight: FontWeight.w600),
                         ),
                       )
                     else
                       Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 10, vertical: 4),
                         decoration: BoxDecoration(
                           color: Colors.green.shade100,
                           borderRadius: BorderRadius.circular(6),
@@ -832,7 +890,8 @@ class _ManageOrdersPageState extends State<ManageOrdersPage> {
             width: 70,
             child: Text(
               label,
-              style: GoogleFonts.poppins(fontSize: 10.5, color: Colors.grey.shade600),
+              style: GoogleFonts.poppins(
+                  fontSize: 10.5, color: Colors.grey.shade600),
             ),
           ),
           const Text(': ', style: TextStyle(color: Colors.grey)),

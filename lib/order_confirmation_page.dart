@@ -4,6 +4,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import 'payment_page.dart';
 import 'user_profile_store.dart';
 import 'user_session.dart';
+import 'status_pesanan.dart';
 
 class _C {
   static const headerBlue = Color(0xFFD6EFFB);
@@ -221,25 +222,30 @@ class _OrderConfirmationPageState extends State<OrderConfirmationPage> {
 
       final customerName = _resolveCustomerName(currentUser);
       final resolvedUid = _resolveUserId(currentUser);
+      final resolvedPickup = _resolvePickupMethod(summary);
+            final initialStatus =
+                resolvedPickup.toLowerCase().contains('antar sendiri')
+                    ? 'Pesanan Masuk'
+                    : 'Penjemputan';
 
       final payload = <String, dynamic>{
-        'order_code': orderCode,
-        'customer_name': customerName,
-        'service_name': summary.jenisLaundry,
-        'speed': summary.kecepatan,
-        'treatment': _normalizeTreatment(summary.pengerjaan),
-        'detergent_name': summary.deterjen,
-        'perfume_name': summary.pewangi,
-        'pickup_method': _resolvePickupMethod(summary),
-        'delivery_method': _resolveDeliveryMethod(summary),
-        'pickup_schedule': summary.jadwal,
-        'address': summary.alamat,
-        'notes': summary.catatan.trim().isEmpty ? null : summary.catatan.trim(),
-        'weight_or_qty': summary.weightOrQty <= 0 ? 1 : summary.weightOrQty,
-        'total_price': totalPrice,
-        'status': 'Waiting',
-        'payment_status': 'Belum Lunas',
-      };
+              'order_code': orderCode,
+              'customer_name': customerName,
+              'service_name': summary.jenisLaundry,
+              'speed': summary.kecepatan,
+              'treatment': _normalizeTreatment(summary.pengerjaan),
+              'detergent_name': summary.deterjen,
+              'perfume_name': summary.pewangi,
+              'pickup_method': resolvedPickup,
+              'delivery_method': _resolveDeliveryMethod(summary),
+              'pickup_schedule': summary.jadwal,
+              'address': summary.alamat,
+              'notes': summary.catatan.trim().isEmpty ? null : summary.catatan.trim(),
+              'weight_or_qty': summary.weightOrQty <= 0 ? 1 : summary.weightOrQty,
+              'total_price': totalPrice,
+              'status': initialStatus,
+              'payment_status': 'Belum Lunas',
+            };
 
       if (resolvedServiceId != null && resolvedServiceId.isNotEmpty) {
         payload['service_id'] = resolvedServiceId;
@@ -249,36 +255,49 @@ class _OrderConfirmationPageState extends State<OrderConfirmationPage> {
         payload['user_id'] = resolvedUid;
       }
 
-      await client.from('orders').insert(payload);
+      final insertedRow = await client
+                .from('orders')
+                .insert(payload)
+                .select()
+                .single();
 
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-            'Pesanan $orderCode berhasil disimpan',
-            style: GoogleFonts.poppins(fontSize: 12),
-          ),
-        ),
-      );
+            if (!mounted) return;
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: Text(
+                  'Pesanan $orderCode berhasil dibuat!',
+                  style: GoogleFonts.poppins(fontSize: 12),
+                ),
+              ),
+            );
 
-      await Navigator.push(
-        context,
-        MaterialPageRoute(
-          builder: (_) => PaymentPage(
-            orderId: orderCode,
-            serviceName: summary.jenisLaundry,
-            totalAmount: _formatRupiah(totalPrice),
-            isPaid: false,
-          ),
-        ),
-      );
-
-      if (!mounted) return;
-      Navigator.pushNamedAndRemoveUntil(
-        context,
-        '/home',
-            (route) => false,
-      );
+            Navigator.pushNamedAndRemoveUntil(
+              context,
+              '/home',
+              (route) => false,
+            );
+            Navigator.push(
+              context,
+              MaterialPageRoute(
+                builder: (_) => const StatusPesananPage(),
+                settings: RouteSettings(
+                  arguments: {
+                    'dbId': insertedRow['id'].toString(),
+                    'orderId': orderCode,
+                    'serviceName': summary.jenisLaundry,
+                    'weight': '${summary.weightOrQty <= 0 ? 1 : summary.weightOrQty}',
+                    'treatment': _normalizeTreatment(summary.pengerjaan),
+                    'speed': summary.kecepatan,
+                    'totalPrice': _formatRupiah(totalPrice),
+                    'status': initialStatus,
+                    'estimate': summary.jadwal,
+                    'pickupMethod': resolvedPickup,
+                    'deliveryMethod': _resolveDeliveryMethod(summary),
+                    'isPaid': false,
+                  },
+                ),
+              ),
+            );
     } catch (e) {
       if (!mounted) return;
       setState(() => _isSubmitting = false);

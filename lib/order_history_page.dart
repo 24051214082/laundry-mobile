@@ -5,6 +5,7 @@ import 'app_bottom_nav.dart';
 import 'order_confirmation_page.dart';
 import 'order_detail_page.dart';
 import 'payment_page.dart';
+import 'status_pesanan.dart';
 import 'user_session.dart';
 
 class _AppColors {
@@ -58,18 +59,18 @@ class OrderItem {
     final String speed = (map['speed'] ?? 'Reguler').toString();
     final String treatment = (map['treatment'] ?? 'Cuci Saja').toString();
     final String detergent =
-    (map['detergent_name'] ?? 'Standar / Bawa Sendiri').toString();
+        (map['detergent_name'] ?? 'Standar / Bawa Sendiri').toString();
     final String perfume =
-    (map['perfume_name'] ?? 'Standar / Bawa Sendiri').toString();
+        (map['perfume_name'] ?? 'Standar / Bawa Sendiri').toString();
     final String pickup = (map['pickup_method'] ?? 'Antar Sendiri').toString();
     final String delivery =
-    (map['delivery_method'] ?? 'Ambil Sendiri').toString();
+        (map['delivery_method'] ?? 'Ambil Sendiri').toString();
     final String schedule = (map['pickup_schedule'] ?? '-').toString();
     final String address = (map['address'] ?? '-').toString();
     final String weightOrQty = (map['weight_or_qty'] ?? '-').toString();
     final String rawStatus = (map['status'] ?? 'Penjemputan').toString();
     final String paymentStatus =
-    (map['payment_status'] ?? 'Belum Lunas').toString();
+        (map['payment_status'] ?? 'Belum Lunas').toString();
 
     final int totalInt = (map['total_price'] is num)
         ? (map['total_price'] as num).toInt()
@@ -232,6 +233,34 @@ class _OrderHistoryPageState extends State<OrderHistoryPage> {
     }
   }
 
+  Future<void> _openStatusPage(OrderItem order) async {
+    await Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => const StatusPesananPage(),
+        settings: RouteSettings(
+          arguments: {
+            'dbId': order.rowId?.toString() ?? '',
+            'orderId': order.id,
+            'serviceName': order.summary?.jenisLaundry ?? order.service,
+            'weight': order.quantity,
+            'treatment': order.summary?.pengerjaan ?? '-',
+            'speed': order.summary?.kecepatan ?? '-',
+            'totalPrice': order.total,
+            'status': order.rawStatus,
+            'estimate': order.summary?.jadwal ?? '-',
+            'pickupMethod': order.summary?.pickupMethod ?? 'Penjemputan',
+            'deliveryMethod': order.summary?.deliveryMethod ?? 'Diantar Kurir',
+            'isPaid': order.isPaid,
+          },
+        ),
+      ),
+    );
+
+    if (!mounted) return;
+    await _fetchOrderHistory();
+  }
+
   Future<void> _openPaymentPage(OrderItem order) async {
     final result = await Navigator.push<bool>(
       context,
@@ -261,7 +290,7 @@ class _OrderHistoryPageState extends State<OrderHistoryPage> {
         _ => true,
       };
       final matchQuery =
-      o.id.toLowerCase().contains(_query.trim().toLowerCase());
+          o.id.toLowerCase().contains(_query.trim().toLowerCase());
       return matchTab && matchQuery;
     }).toList();
   }
@@ -279,42 +308,43 @@ class _OrderHistoryPageState extends State<OrderHistoryPage> {
           Expanded(
             child: _isLoading
                 ? const Center(
-              child: CircularProgressIndicator(color: _AppColors.primary),
-            )
+                    child: CircularProgressIndicator(color: _AppColors.primary),
+                  )
                 : RefreshIndicator(
-              onRefresh: _fetchOrderHistory,
-              color: _AppColors.primary,
-              child: orders.isEmpty
-                  ? ListView(
-                children: [
-                  SizedBox(
-                    height:
-                    MediaQuery.of(context).size.height * 0.45,
-                    child: Center(
-                      child: Text(
-                        'Pesanan tidak ditemukan',
-                        style: GoogleFonts.poppins(
-                          fontSize: 13,
-                          color: _AppColors.navy.withOpacity(0.6),
-                        ),
-                      ),
-                    ),
+                    onRefresh: _fetchOrderHistory,
+                    color: _AppColors.primary,
+                    child: orders.isEmpty
+                        ? ListView(
+                            children: [
+                              SizedBox(
+                                height:
+                                    MediaQuery.of(context).size.height * 0.45,
+                                child: Center(
+                                  child: Text(
+                                    'Pesanan tidak ditemukan',
+                                    style: GoogleFonts.poppins(
+                                      fontSize: 13,
+                                      color: _AppColors.navy.withOpacity(0.6),
+                                    ),
+                                  ),
+                                ),
+                              ),
+                            ],
+                          )
+                        : ListView.separated(
+                            padding: const EdgeInsets.fromLTRB(16, 16, 16, 24),
+                            itemCount: orders.length,
+                            separatorBuilder: (_, __) =>
+                                const SizedBox(height: 14),
+                            itemBuilder: (_, i) => _OrderCard(
+                              order: orders[i],
+                              onPayTap: () => _openPaymentPage(orders[i]),
+                              onStatusTap: () => _openStatusPage(orders[i]),
+                              onDetailTap: () =>
+                                  _openOrderDetailPage(orders[i]),
+                            ),
+                          ),
                   ),
-                ],
-              )
-                  : ListView.separated(
-                padding: const EdgeInsets.fromLTRB(16, 16, 16, 24),
-                itemCount: orders.length,
-                separatorBuilder: (_, __) =>
-                const SizedBox(height: 14),
-                itemBuilder: (_, i) => _OrderCard(
-                  order: orders[i],
-                  onPayTap: () => _openPaymentPage(orders[i]),
-                  onDetailTap: () =>
-                      _openOrderDetailPage(orders[i]),
-                ),
-              ),
-            ),
           ),
         ],
       ),
@@ -395,7 +425,7 @@ class _OrderHistoryPageState extends State<OrderHistoryPage> {
                       alignment: Alignment.center,
                       decoration: BoxDecoration(
                         color:
-                        selected ? _AppColors.primary : Colors.transparent,
+                            selected ? _AppColors.primary : Colors.transparent,
                         borderRadius: BorderRadius.circular(12),
                         border: selected
                             ? Border.all(color: Colors.white, width: 1.5)
@@ -425,11 +455,13 @@ class _OrderHistoryPageState extends State<OrderHistoryPage> {
 class _OrderCard extends StatelessWidget {
   final OrderItem order;
   final VoidCallback onPayTap;
+  final VoidCallback onStatusTap;
   final VoidCallback onDetailTap;
 
   const _OrderCard({
     required this.order,
     required this.onPayTap,
+    required this.onStatusTap,
     required this.onDetailTap,
   });
 
@@ -460,7 +492,15 @@ class _OrderCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final canPay = !order.isPaid && order.status != OrderStatus.dibatalkan;
+    final lowerRawStatus = order.rawStatus.trim().toLowerCase();
+        final isPriceConfirmed = lowerRawStatus != 'penjemputan' &&
+            lowerRawStatus != 'pesanan masuk' &&
+            lowerRawStatus != 'konfirmasi harga';
+
+        final canPay = !order.isPaid &&
+            order.status != OrderStatus.dibatalkan &&
+            isPriceConfirmed;
+    final canTrackStatus = order.status != OrderStatus.dibatalkan;
 
     return Container(
       decoration: BoxDecoration(
@@ -528,7 +568,7 @@ class _OrderCard extends StatelessWidget {
                 ),
                 Container(
                   padding:
-                  const EdgeInsets.symmetric(horizontal: 14, vertical: 7),
+                      const EdgeInsets.symmetric(horizontal: 14, vertical: 7),
                   decoration: BoxDecoration(
                     color: _chipColor,
                     borderRadius: BorderRadius.circular(20),
@@ -613,51 +653,75 @@ class _OrderCard extends StatelessWidget {
           const Divider(height: 1, thickness: 1, color: _AppColors.divider),
           Padding(
             padding: const EdgeInsets.fromLTRB(16, 10, 16, 12),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.end,
-              children: [
-                if (canPay) ...[
-                  GestureDetector(
-                    onTap: onPayTap,
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: 16, vertical: 9),
-                      decoration: BoxDecoration(
-                        color: _AppColors.primary,
+            child: Align(
+              alignment: Alignment.centerRight,
+              child: Wrap(
+                alignment: WrapAlignment.end,
+                spacing: 8,
+                runSpacing: 8,
+                children: [
+                  if (canPay)
+                    GestureDetector(
+                      onTap: onPayTap,
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 14, vertical: 9),
+                        decoration: BoxDecoration(
+                          color: _AppColors.primary,
+                          borderRadius: BorderRadius.circular(20),
+                        ),
+                        child: Text(
+                          'Bayar Sekarang',
+                          style: GoogleFonts.poppins(
+                            fontSize: 11,
+                            fontWeight: FontWeight.w600,
+                            color: Colors.white,
+                          ),
+                        ),
+                      ),
+                    ),
+                  if (canTrackStatus)
+                    Material(
+                      color: const Color(0xFFD6EFFB),
+                      borderRadius: BorderRadius.circular(20),
+                      child: InkWell(
+                        onTap: onStatusTap,
                         borderRadius: BorderRadius.circular(20),
-                      ),
-                      child: Text(
-                        'Bayar Sekarang',
-                        style: GoogleFonts.poppins(
-                          fontSize: 11,
-                          fontWeight: FontWeight.w600,
-                          color: Colors.white,
+                        child: Padding(
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 14, vertical: 9),
+                          child: Text(
+                            'Cek Status',
+                            style: GoogleFonts.poppins(
+                              fontSize: 11,
+                              fontWeight: FontWeight.w600,
+                              color: _AppColors.navy,
+                            ),
+                          ),
                         ),
                       ),
                     ),
-                  ),
-                  const SizedBox(width: 8),
-                ],
-                Material(
-                  color: _AppColors.buttonGrey,
-                  borderRadius: BorderRadius.circular(20),
-                  child: InkWell(
-                    onTap: onDetailTap,
+                  Material(
+                    color: _AppColors.buttonGrey,
                     borderRadius: BorderRadius.circular(20),
-                    child: Padding(
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: 16, vertical: 9),
-                      child: Text(
-                        'Detail Pesanan',
-                        style: GoogleFonts.poppins(
-                          fontSize: 11,
-                          color: Colors.black87,
+                    child: InkWell(
+                      onTap: onDetailTap,
+                      borderRadius: BorderRadius.circular(20),
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 14, vertical: 9),
+                        child: Text(
+                          'Detail Pesanan',
+                          style: GoogleFonts.poppins(
+                            fontSize: 11,
+                            color: Colors.black87,
+                          ),
                         ),
                       ),
                     ),
                   ),
-                ),
-              ],
+                ],
+              ),
             ),
           ),
         ],
