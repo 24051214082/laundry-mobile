@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
-import 'user_profile_store.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 
 class CustomerDataPage extends StatefulWidget {
   const CustomerDataPage({super.key});
@@ -11,55 +11,58 @@ class CustomerDataPage extends StatefulWidget {
 
 class _CustomerDataPageState extends State<CustomerDataPage> {
   final TextEditingController _searchController = TextEditingController();
-  final _profileStore = UserProfileStore.instance;
 
+  List _allCustomers = [];
+  bool _isLoading = true;
   String _searchQuery = '';
   String _sortOption = 'Terbaru'; // Pilihan: 'Terbaru', 'A-Z', 'Z-A'
 
-  // Mengambil daftar customer dengan struktur field identik seperti UserProfileStore
-  List get _allCustomers {
-    return [
-      {
-        'id': 5,
-        'name': _profileStore.name,
-        'phone': _profileStore.phone,
-        'email': _profileStore.email,
-        'address': _profileStore.address,
-        'avatarUrl': _profileStore.avatarUrl,
-      },
-      {
-        'id': 4,
-        'name': 'Nency Astiti',
-        'phone': '081234567890',
-        'email': 'nency@gmail.com',
-        'address': 'Jl. Jambangan Indah Blok C-12, Surabaya',
-        'avatarUrl': null,
-      },
-      {
-        'id': 3,
-        'name': 'Alya Putri',
-        'phone': '085678901234',
-        'email': 'alya.putri@gmail.com',
-        'address': 'Perum. Graha Famili Blok F-08, Wiyung, Surabaya',
-        'avatarUrl': null,
-      },
-      {
-        'id': 2,
-        'name': 'Rizky Pratama',
-        'phone': '087812345678',
-        'email': 'rizky.p@gmail.com',
-        'address': 'Jl. Dharmawangsa No. 45, Gubeng, Surabaya',
-        'avatarUrl': null,
-      },
-      {
-        'id': 1,
-        'name': 'Budi Santoso',
-        'phone': '089654321098',
-        'email': 'budi.santoso@gmail.com',
-        'address': 'Jl. Raya Darmo Permai II No. 21, Surabaya',
-        'avatarUrl': null,
-      },
-    ];
+  @override
+  void initState() {
+    super.initState();
+    _fetchCustomers();
+  }
+
+  Future<void> _fetchCustomers() async {
+    setState(() => _isLoading = true);
+    try {
+      final response = await Supabase.instance.client
+          .from('users')
+          .select('id, name, phone, email, address, created_at')
+          .eq('role', 'customer')
+          .order('created_at', ascending: false);
+
+      if (!mounted) return;
+
+      final List mapped = List.from(response).map((row) {
+        final rawPhone = (row['phone'] ?? '').toString().trim();
+        final rawAddress = (row['address'] ?? '').toString().trim();
+
+        return {
+          'id': (row['id'] ?? '').toString(),
+          'name': (row['name'] ?? 'Tanpa Nama').toString(),
+          'phone': rawPhone.isEmpty ? '-' : rawPhone,
+          'email': (row['email'] ?? '-').toString(),
+          'address': rawAddress.isEmpty ? 'Alamat belum diisi' : rawAddress,
+          'created_at': (row['created_at'] ?? '').toString(),
+          'avatarUrl': null,
+        };
+      }).toList();
+
+      setState(() {
+        _allCustomers = mapped;
+        _isLoading = false;
+      });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _isLoading = false);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Gagal memuat data customer: $e'),
+          backgroundColor: Colors.redAccent,
+        ),
+      );
+    }
   }
 
   // Filter pencarian & pengurutan otomatis
@@ -86,7 +89,9 @@ class _CustomerDataPageState extends State<CustomerDataPage> {
           .toLowerCase()
           .compareTo(a['name'].toString().toLowerCase()));
     } else {
-      filtered.sort((a, b) => (b['id'] as int).compareTo(a['id'] as int));
+      filtered.sort((a, b) => b['created_at']
+          .toString()
+          .compareTo(a['created_at'].toString()));
     }
 
     return filtered;
@@ -141,8 +146,8 @@ class _CustomerDataPageState extends State<CustomerDataPage> {
     final String labelText = option == 'Terbaru'
         ? 'Terbaru (Pendaftar Terakhir)'
         : option == 'A-Z'
-            ? 'Nama (A - Z)'
-            : 'Nama (Z - A)';
+        ? 'Nama (A - Z)'
+        : 'Nama (Z - A)';
 
     return ListTile(
       contentPadding: EdgeInsets.zero,
@@ -201,9 +206,9 @@ class _CustomerDataPageState extends State<CustomerDataPage> {
                       ),
                       image: avatarUrl != null && avatarUrl.isNotEmpty
                           ? DecorationImage(
-                              image: NetworkImage(avatarUrl),
-                              fit: BoxFit.cover,
-                            )
+                        image: NetworkImage(avatarUrl),
+                        fit: BoxFit.cover,
+                      )
                           : null,
                     ),
                     child: avatarUrl == null || avatarUrl.isEmpty
@@ -336,9 +341,10 @@ class _CustomerDataPageState extends State<CustomerDataPage> {
                           context,
                           '/admin-chat-room',
                           arguments: {
+                            'customerId': customer['id'],
                             'customerName': customer['name'],
-                            'orderId': '#LKN4wa123',
-                            'serviceName': 'Laundry Kiloan',
+                            'orderId': '-',
+                            'serviceName': 'Layanan Laundry',
                             'status': 'Aktif',
                           },
                         );
@@ -571,22 +577,22 @@ class _CustomerDataPageState extends State<CustomerDataPage> {
                         ),
                         suffixIcon: _searchQuery.isNotEmpty
                             ? IconButton(
-                                icon: const Icon(
-                                  Icons.close_rounded,
-                                  color: Color(0xFF94A3B8),
-                                  size: 20,
-                                ),
-                                onPressed: () {
-                                  _searchController.clear();
-                                  setState(() {
-                                    _searchQuery = '';
-                                  });
-                                },
-                              )
+                          icon: const Icon(
+                            Icons.close_rounded,
+                            color: Color(0xFF94A3B8),
+                            size: 20,
+                          ),
+                          onPressed: () {
+                            _searchController.clear();
+                            setState(() {
+                              _searchQuery = '';
+                            });
+                          },
+                        )
                             : null,
                         border: InputBorder.none,
                         contentPadding:
-                            const EdgeInsets.symmetric(vertical: 14),
+                        const EdgeInsets.symmetric(vertical: 14),
                       ),
                     ),
                   ),
@@ -596,224 +602,236 @@ class _CustomerDataPageState extends State<CustomerDataPage> {
 
             // Content List Section
             Expanded(
-              child: SingleChildScrollView(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
-                child: Column(
-                  children: [
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        Text(
-                          'Daftar Customer',
-                          style: GoogleFonts.poppins(
-                            fontSize: 18,
-                            fontWeight: FontWeight.w700,
-                            color: const Color(0xFF1B4E6C),
-                          ),
-                        ),
-                        Container(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 12,
-                            vertical: 6,
-                          ),
-                          decoration: BoxDecoration(
-                            color: const Color(0xFFD6EFFB),
-                            borderRadius: BorderRadius.circular(16),
-                          ),
-                          child: Text(
-                            'Total : ${displayedCustomers.length} customer',
+              child: RefreshIndicator(
+                onRefresh: _fetchCustomers,
+                color: const Color(0xFF338CA8),
+                child: SingleChildScrollView(
+                  physics: const AlwaysScrollableScrollPhysics(),
+                  padding:
+                  const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+                  child: Column(
+                    children: [
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          Text(
+                            'Daftar Customer',
                             style: GoogleFonts.poppins(
-                              fontSize: 11,
+                              fontSize: 18,
                               fontWeight: FontWeight.w700,
                               color: const Color(0xFF1B4E6C),
                             ),
                           ),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 12),
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        Text(
-                          'Sort by',
-                          style: GoogleFonts.poppins(
-                            fontSize: 16,
-                            fontWeight: FontWeight.w700,
-                            color: const Color(0xFF1B4E6C),
-                          ),
-                        ),
-                        GestureDetector(
-                          onTap: _showSortOptions,
-                          child: Container(
+                          Container(
                             padding: const EdgeInsets.symmetric(
-                              horizontal: 14,
+                              horizontal: 12,
                               vertical: 6,
                             ),
                             decoration: BoxDecoration(
-                              color: const Color(0xFFF1F5F9),
-                              borderRadius: BorderRadius.circular(20),
-                              boxShadow: [
-                                BoxShadow(
-                                  color: Colors.black.withValues(alpha: 0.05),
-                                  blurRadius: 4,
-                                  offset: const Offset(0, 2),
-                                ),
-                              ],
+                              color: const Color(0xFFD6EFFB),
+                              borderRadius: BorderRadius.circular(16),
                             ),
-                            child: Row(
-                              children: [
-                                Text(
-                                  _sortOption,
-                                  style: GoogleFonts.poppins(
-                                    fontSize: 11,
-                                    fontWeight: FontWeight.w700,
-                                    color: const Color(0xFF1B4E6C),
-                                  ),
-                                ),
-                                const SizedBox(width: 4),
-                                const Icon(
-                                  Icons.arrow_circle_down,
-                                  size: 16,
-                                  color: Color(0xFF1B4E6C),
-                                ),
-                              ],
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 16),
-
-                    if (displayedCustomers.isEmpty)
-                      Padding(
-                        padding: const EdgeInsets.symmetric(vertical: 40),
-                        child: Column(
-                          children: [
-                            const Icon(
-                              Icons.search_off_rounded,
-                              size: 48,
-                              color: Color(0xFF94A3B8),
-                            ),
-                            const SizedBox(height: 8),
-                            Text(
-                              'Customer tidak ditemukan',
+                            child: Text(
+                              'Total : ${displayedCustomers.length} customer',
                               style: GoogleFonts.poppins(
-                                fontSize: 13,
-                                fontWeight: FontWeight.w600,
-                                color: const Color(0xFF64748B),
+                                fontSize: 11,
+                                fontWeight: FontWeight.w700,
+                                color: const Color(0xFF1B4E6C),
                               ),
                             ),
-                          ],
-                        ),
-                      )
-                    else
-                      ListView.separated(
-                        shrinkWrap: true,
-                        physics: const NeverScrollableScrollPhysics(),
-                        itemCount: displayedCustomers.length,
-                        separatorBuilder: (context, index) =>
-                            const SizedBox(height: 12),
-                        itemBuilder: (context, index) {
-                          final item = displayedCustomers[index];
-                          return Container(
-                            padding: const EdgeInsets.all(12),
-                            decoration: BoxDecoration(
-                              color: Colors.white,
-                              borderRadius: BorderRadius.circular(16),
-                              border:
-                                  Border.all(color: const Color(0xFFF1F5F9)),
-                              boxShadow: [
-                                BoxShadow(
-                                  color: Colors.black.withValues(alpha: 0.04),
-                                  blurRadius: 8,
-                                  offset: const Offset(0, 3),
-                                ),
-                              ],
-                            ),
-                            child: Row(
-                              children: [
-                                const CircleAvatar(
-                                  radius: 26,
-                                  backgroundColor: Color(0xFF4285F4),
-                                  child: Icon(
-                                    Icons.person,
-                                    color: Colors.white,
-                                    size: 32,
-                                  ),
-                                ),
-                                const SizedBox(width: 12),
-                                Expanded(
-                                  child: Column(
-                                    crossAxisAlignment:
-                                        CrossAxisAlignment.start,
-                                    children: [
-                                      Text(
-                                        item['name'],
-                                        style: GoogleFonts.poppins(
-                                          fontSize: 16,
-                                          fontWeight: FontWeight.w700,
-                                          color: const Color(0xFF1B4E6C),
-                                        ),
-                                      ),
-                                      Text(
-                                        'HP : ${item['phone']}',
-                                        style: GoogleFonts.poppins(
-                                          fontSize: 11,
-                                          color: const Color(0xFF475569),
-                                        ),
-                                      ),
-                                      Text(
-                                        'Email : ${item['email']}',
-                                        style: GoogleFonts.poppins(
-                                          fontSize: 11,
-                                          color: const Color(0xFF475569),
-                                        ),
-                                      ),
-                                    ],
-                                  ),
-                                ),
-                                ElevatedButton(
-                                  onPressed: () => _showCustomerDetail(item),
-                                  style: ElevatedButton.styleFrom(
-                                    backgroundColor: const Color(0xFFD6EFFB),
-                                    elevation: 0,
-                                    padding: const EdgeInsets.symmetric(
-                                      horizontal: 12,
-                                      vertical: 8,
-                                    ),
-                                    shape: RoundedRectangleBorder(
-                                      borderRadius: BorderRadius.circular(20),
-                                    ),
-                                  ),
-                                  child: Row(
-                                    mainAxisSize: MainAxisSize.min,
-                                    children: [
-                                      Text(
-                                        'Detail',
-                                        style: GoogleFonts.poppins(
-                                          fontSize: 11,
-                                          fontWeight: FontWeight.w700,
-                                          color: const Color(0xFF1B4E6C),
-                                        ),
-                                      ),
-                                      const SizedBox(width: 2),
-                                      const Icon(
-                                        Icons
-                                            .keyboard_double_arrow_right_rounded,
-                                        size: 16,
-                                        color: Color(0xFF1B4E6C),
-                                      ),
-                                    ],
-                                  ),
-                                ),
-                              ],
-                            ),
-                          );
-                        },
+                          ),
+                        ],
                       ),
-                  ],
+                      const SizedBox(height: 12),
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          Text(
+                            'Sort by',
+                            style: GoogleFonts.poppins(
+                              fontSize: 16,
+                              fontWeight: FontWeight.w700,
+                              color: const Color(0xFF1B4E6C),
+                            ),
+                          ),
+                          GestureDetector(
+                            onTap: _showSortOptions,
+                            child: Container(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 14,
+                                vertical: 6,
+                              ),
+                              decoration: BoxDecoration(
+                                color: const Color(0xFFF1F5F9),
+                                borderRadius: BorderRadius.circular(20),
+                                boxShadow: [
+                                  BoxShadow(
+                                    color: Colors.black.withValues(alpha: 0.05),
+                                    blurRadius: 4,
+                                    offset: const Offset(0, 2),
+                                  ),
+                                ],
+                              ),
+                              child: Row(
+                                children: [
+                                  Text(
+                                    _sortOption,
+                                    style: GoogleFonts.poppins(
+                                      fontSize: 11,
+                                      fontWeight: FontWeight.w700,
+                                      color: const Color(0xFF1B4E6C),
+                                    ),
+                                  ),
+                                  const SizedBox(width: 4),
+                                  const Icon(
+                                    Icons.arrow_circle_down,
+                                    size: 16,
+                                    color: Color(0xFF1B4E6C),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 16),
+
+                      if (_isLoading)
+                        const Padding(
+                          padding: EdgeInsets.symmetric(vertical: 48),
+                          child: CircularProgressIndicator(
+                            color: Color(0xFF338CA8),
+                          ),
+                        )
+                      else if (displayedCustomers.isEmpty)
+                        Padding(
+                          padding: const EdgeInsets.symmetric(vertical: 40),
+                          child: Column(
+                            children: [
+                              const Icon(
+                                Icons.search_off_rounded,
+                                size: 48,
+                                color: Color(0xFF94A3B8),
+                              ),
+                              const SizedBox(height: 8),
+                              Text(
+                                'Customer tidak ditemukan',
+                                style: GoogleFonts.poppins(
+                                  fontSize: 13,
+                                  fontWeight: FontWeight.w600,
+                                  color: const Color(0xFF64748B),
+                                ),
+                              ),
+                            ],
+                          ),
+                        )
+                      else
+                        ListView.separated(
+                          shrinkWrap: true,
+                          physics: const NeverScrollableScrollPhysics(),
+                          itemCount: displayedCustomers.length,
+                          separatorBuilder: (context, index) =>
+                          const SizedBox(height: 12),
+                          itemBuilder: (context, index) {
+                            final item = displayedCustomers[index];
+                            return Container(
+                              padding: const EdgeInsets.all(12),
+                              decoration: BoxDecoration(
+                                color: Colors.white,
+                                borderRadius: BorderRadius.circular(16),
+                                border:
+                                Border.all(color: const Color(0xFFF1F5F9)),
+                                boxShadow: [
+                                  BoxShadow(
+                                    color: Colors.black.withValues(alpha: 0.04),
+                                    blurRadius: 8,
+                                    offset: const Offset(0, 3),
+                                  ),
+                                ],
+                              ),
+                              child: Row(
+                                children: [
+                                  const CircleAvatar(
+                                    radius: 26,
+                                    backgroundColor: Color(0xFF4285F4),
+                                    child: Icon(
+                                      Icons.person,
+                                      color: Colors.white,
+                                      size: 32,
+                                    ),
+                                  ),
+                                  const SizedBox(width: 12),
+                                  Expanded(
+                                    child: Column(
+                                      crossAxisAlignment:
+                                      CrossAxisAlignment.start,
+                                      children: [
+                                        Text(
+                                          item['name'],
+                                          style: GoogleFonts.poppins(
+                                            fontSize: 16,
+                                            fontWeight: FontWeight.w700,
+                                            color: const Color(0xFF1B4E6C),
+                                          ),
+                                        ),
+                                        Text(
+                                          'HP : ${item['phone']}',
+                                          style: GoogleFonts.poppins(
+                                            fontSize: 11,
+                                            color: const Color(0xFF475569),
+                                          ),
+                                        ),
+                                        Text(
+                                          'Email : ${item['email']}',
+                                          style: GoogleFonts.poppins(
+                                            fontSize: 11,
+                                            color: const Color(0xFF475569),
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                  ElevatedButton(
+                                    onPressed: () => _showCustomerDetail(item),
+                                    style: ElevatedButton.styleFrom(
+                                      backgroundColor: const Color(0xFFD6EFFB),
+                                      elevation: 0,
+                                      padding: const EdgeInsets.symmetric(
+                                        horizontal: 12,
+                                        vertical: 8,
+                                      ),
+                                      shape: RoundedRectangleBorder(
+                                        borderRadius: BorderRadius.circular(20),
+                                      ),
+                                    ),
+                                    child: Row(
+                                      mainAxisSize: MainAxisSize.min,
+                                      children: [
+                                        Text(
+                                          'Detail',
+                                          style: GoogleFonts.poppins(
+                                            fontSize: 11,
+                                            fontWeight: FontWeight.w700,
+                                            color: const Color(0xFF1B4E6C),
+                                          ),
+                                        ),
+                                        const SizedBox(width: 2),
+                                        const Icon(
+                                          Icons
+                                              .keyboard_double_arrow_right_rounded,
+                                          size: 16,
+                                          color: Color(0xFF1B4E6C),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            );
+                          },
+                        ),
+                    ],
+                  ),
                 ),
               ),
             ),
