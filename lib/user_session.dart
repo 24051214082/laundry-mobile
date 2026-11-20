@@ -1,5 +1,7 @@
 import 'dart:convert';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'realtime_notif_banner.dart';
+import 'user_profile_store.dart';
 
 class UserSession {
   static const String _storageKey = 'wish_you_wash_user_session';
@@ -13,6 +15,16 @@ class UserSession {
 
   static bool get isLoggedIn => userId != null && userId!.isNotEmpty;
 
+  static void _syncToProfileStore() {
+    final store = UserProfileStore.instance;
+    store.update(
+      name: (name != null && name!.isNotEmpty) ? name! : store.name,
+      email: (email != null && email!.isNotEmpty) ? email! : store.email,
+      phone: (phone != null && phone!.isNotEmpty) ? phone! : store.phone,
+      address: (address != null && address!.isNotEmpty) ? address! : store.address,
+    );
+  }
+
   static Future<void> setUser(Map<String, dynamic> user) async {
     userId = user['id']?.toString();
     name = user['name']?.toString();
@@ -20,6 +32,9 @@ class UserSession {
     phone = user['phone']?.toString();
     address = user['address']?.toString();
     role = user['role']?.toString();
+
+    _syncToProfileStore();
+    RealtimeNotifService.startListening();
 
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString(_storageKey, jsonEncode(user));
@@ -37,6 +52,11 @@ class UserSession {
     phone = user['phone']?.toString();
     address = user['address']?.toString();
     role = user['role']?.toString();
+
+    _syncToProfileStore();
+    if (isLoggedIn) {
+      RealtimeNotifService.startListening();
+    }
     return isLoggedIn;
   }
 
@@ -47,6 +67,8 @@ class UserSession {
     phone = null;
     address = null;
     role = null;
+
+    RealtimeNotifService.stopListening();
 
     final prefs = await SharedPreferences.getInstance();
     await prefs.remove(_storageKey);

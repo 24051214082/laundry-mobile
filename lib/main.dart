@@ -23,6 +23,7 @@ import 'rekapitulasi_transaksi.dart';
 import 'admin_profile_page.dart';
 import 'manage_orders_page.dart';
 import 'payment_page.dart';
+import 'realtime_notif_banner.dart';
 import 'user_session.dart';
 
 Future<void> main() async {
@@ -38,6 +39,8 @@ Future<void> main() async {
       ? '/login'
       : (UserSession.role == 'admin' ? '/admin-home' : '/home');
 
+  RealtimeNotifService.startListening();
+
   runApp(MyApp(initialRoute: startRoute));
 }
 
@@ -48,6 +51,8 @@ class MyApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
+      navigatorKey: RealtimeNotifService.navigatorKey,
+      navigatorObservers: [RealtimeNotifService.routeObserver],
       title: 'Wish You Wash Here',
       debugShowCheckedModeBanner: false,
       theme: ThemeData(
