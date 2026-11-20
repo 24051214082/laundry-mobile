@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'app_bottom_nav.dart';
-import 'status_pesanan.dart';
 import 'user_profile_store.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'user_session.dart';
@@ -14,21 +13,44 @@ class HomePage extends StatefulWidget {
 }
 
 class _HomePageState extends State<HomePage> {
-  Map? activeOrderData;
+  var _activeOrders = [];
+  int _currentOrderIndex = 0;
+  late final PageController _orderPageController;
   bool _isLoadingOrder = true;
 
   // State dinamis untuk Katalog Layanan dari tabel 'services'
-  List _services = [];
+  var _services = [];
   bool _isLoadingServices = true;
 
   @override
   void initState() {
     super.initState();
-    _fetchActiveOrder();
+    _orderPageController = PageController();
+    _fetchActiveOrders();
     _fetchServices();
   }
 
-  Future<void> _fetchActiveOrder() async {
+  @override
+  void dispose() {
+    _orderPageController.dispose();
+    super.dispose();
+  }
+
+  void _goToOrderIndex(int index) {
+    final total = _activeOrders.length;
+    if (total <= 1) return;
+    final int target = ((index % total) + total) % total;
+    setState(() => _currentOrderIndex = target);
+    if (_orderPageController.hasClients) {
+      _orderPageController.animateToPage(
+        target,
+        duration: const Duration(milliseconds: 240),
+        curve: Curves.easeOutCubic,
+      );
+    }
+  }
+
+  Future<void> _fetchActiveOrders() async {
     setState(() => _isLoadingOrder = true);
     try {
       var query = Supabase.instance.client
@@ -41,41 +63,60 @@ class _HomePageState extends State<HomePage> {
         query = query.eq('user_id', UserSession.userId!);
       }
 
-      final row = await query
-          .order('created_at', ascending: false)
-          .limit(1)
-          .maybeSingle();
+      final rows = await query.order('created_at', ascending: false);
 
       if (!mounted) return;
 
-      if (row == null) {
-        setState(() {
-          activeOrderData = null;
-          _isLoadingOrder = false;
-        });
-        return;
-      }
+      final parsedOrders = [];
+      for (final item in (rows as List)) {
+        final row = Map<String, dynamic>.from(item as Map);
+        final serviceName = (row['service_name'] ?? 'Laundry').toString();
+        final assetImg = _resolveServiceAsset(serviceName);
+        final rawPaymentStatus =
+        (row['payment_status'] ?? '').toString().toLowerCase();
 
-      final serviceName = (row['service_name'] ?? 'Laundry').toString();
-      final assetImg = _resolveServiceAsset(serviceName);
-
-      setState(() {
-        activeOrderData = {
+        parsedOrders.add({
           'dbId': row['id'].toString(),
           'orderId': (row['order_code'] ?? '-').toString(),
           'serviceName': serviceName,
           'weight': (row['weight_or_qty'] ?? '-').toString(),
           'treatment': (row['treatment'] ?? '-').toString(),
+          'speed': (row['speed'] ?? '-').toString(),
           'perfume': (row['perfume_name'] ?? '-').toString(),
           'detergent': (row['detergent_name'] ?? '-').toString(),
+          'pickupMethod': (row['pickup_method'] ?? 'Penjemputan').toString(),
+          'deliveryMethod':
+          (row['delivery_method'] ?? 'Diantar Kurir').toString(),
           'method':
           '${row['pickup_method'] ?? '-'} • ${row['delivery_method'] ?? '-'}',
           'address': (row['address'] ?? '-').toString(),
           'totalPrice': 'Rp ${row['total_price'] ?? 0}',
           'status': (row['status'] ?? 'Diproses').toString(),
           'estimate': (row['pickup_schedule'] ?? '-').toString(),
+          'isPaid': rawPaymentStatus == 'lunas',
           'image': assetImg,
-        };
+        });
+      }
+
+      int nextIndex = 0;
+      if (parsedOrders.isNotEmpty) {
+        if (_currentOrderIndex < 0) {
+          nextIndex = 0;
+        } else if (_currentOrderIndex >= parsedOrders.length) {
+          nextIndex = parsedOrders.length - 1;
+        } else {
+          nextIndex = _currentOrderIndex;
+        }
+      }
+
+      if (_orderPageController.hasClients &&
+          _orderPageController.page?.round() != nextIndex) {
+        _orderPageController.jumpToPage(nextIndex);
+      }
+
+      setState(() {
+        _activeOrders = parsedOrders;
+        _currentOrderIndex = nextIndex;
         _isLoadingOrder = false;
       });
     } catch (_) {
@@ -132,13 +173,12 @@ class _HomePageState extends State<HomePage> {
     return 'Rp $formattedNumber';
   }
 
-  void _navigateToStatusPesanan() {
-    if (activeOrderData == null) return;
+  void _navigateToStatusPesanan(Map<String, dynamic> order) {
     Navigator.pushNamed(
       context,
       '/status-pesanan',
-      arguments: activeOrderData,
-    ).then((_) => _fetchActiveOrder());
+      arguments: order,
+    ).then((_) => _fetchActiveOrders());
   }
 
   void _navigateToBooking(String serviceName) {
@@ -147,9 +187,350 @@ class _HomePageState extends State<HomePage> {
       '/booking',
       arguments: serviceName,
     ).then((_) {
-      _fetchActiveOrder();
+      _fetchActiveOrders();
       _fetchServices();
     });
+  }
+
+  Widget _buildStepNavButton({
+    required IconData icon,
+    required VoidCallback onTap,
+  }) {
+    return GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onTap: onTap,
+      child: Container(
+        width: 20,
+        height: 20,
+        decoration: BoxDecoration(
+          color: const Color(0xFFE0F2FE),
+          borderRadius: BorderRadius.circular(6),
+        ),
+        child: Icon(
+          icon,
+          size: 15,
+          color: const Color(0xFF0284C7),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildActiveOrderCard({
+    Map<String, dynamic>? order,
+    String? positionLabel,
+    bool showStepControls = false,
+    bool isEmptyState = false,
+  }) {
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: isEmptyState
+            ? () => _navigateToBooking('Laundry Kiloan')
+            : () => _navigateToStatusPesanan(order!),
+        borderRadius: BorderRadius.circular(24),
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 15, vertical: 13),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(24),
+            border: Border.all(
+              color: Colors.white.withOpacity(0.9),
+              width: 1.5,
+            ),
+            boxShadow: [
+              BoxShadow(
+                color: const Color(0xFF1B4E6C).withOpacity(0.09),
+                blurRadius: 18,
+                offset: const Offset(0, 7),
+              ),
+            ],
+          ),
+          child: Row(
+            children: [
+              Container(
+                width: 78,
+                height: 78,
+                padding: const EdgeInsets.all(6),
+                decoration: BoxDecoration(
+                  gradient: const LinearGradient(
+                    colors: [Color(0xFFE0F2FE), Color(0xFFBAE6FD)],
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                  ),
+                  borderRadius: BorderRadius.circular(20),
+                ),
+                child: Image.asset(
+                  order?['image']?.toString() ?? 'assets/laundrykiloan.PNG',
+                  fit: BoxFit.contain,
+                  errorBuilder: (context, error, stackTrace) => const Icon(
+                    Icons.local_laundry_service_rounded,
+                    size: 40,
+                    color: Color(0xFF0284C7),
+                  ),
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Flexible(
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Flexible(
+                                child: Text(
+                                  'Pesanan Aktif',
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: GoogleFonts.poppins(
+                                    fontSize: 14,
+                                    fontWeight: FontWeight.w700,
+                                    color: const Color(0xFF1B4E6C),
+                                  ),
+                                ),
+                              ),
+                              if (positionLabel != null) ...[
+                                const SizedBox(width: 6),
+                                if (showStepControls) ...[
+                                  _buildStepNavButton(
+                                    icon: Icons.chevron_left_rounded,
+                                    onTap: () =>
+                                        _goToOrderIndex(_currentOrderIndex - 1),
+                                  ),
+                                  const SizedBox(width: 4),
+                                ],
+                                Container(
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 6,
+                                    vertical: 1.5,
+                                  ),
+                                  decoration: BoxDecoration(
+                                    color: const Color(0xFFE0F2FE),
+                                    borderRadius: BorderRadius.circular(6),
+                                  ),
+                                  child: Text(
+                                    positionLabel,
+                                    style: GoogleFonts.poppins(
+                                      fontSize: 9.5,
+                                      fontWeight: FontWeight.w700,
+                                      color: const Color(0xFF0284C7),
+                                    ),
+                                  ),
+                                ),
+                                if (showStepControls) ...[
+                                  const SizedBox(width: 4),
+                                  _buildStepNavButton(
+                                    icon: Icons.chevron_right_rounded,
+                                    onTap: () =>
+                                        _goToOrderIndex(_currentOrderIndex + 1),
+                                  ),
+                                ],
+                              ],
+                            ],
+                          ),
+                        ),
+                        const SizedBox(width: 6),
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 9,
+                            vertical: 3,
+                          ),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFFF3E8FF),
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                          child: Text(
+                            isEmptyState
+                                ? 'Tidak Ada'
+                                : (order?['status']?.toString() ?? 'Diproses'),
+                            style: GoogleFonts.poppins(
+                              fontSize: 10,
+                              fontWeight: FontWeight.w600,
+                              color: const Color(0xFF7E22CE),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                    Text(
+                      isEmptyState ? '-' : (order?['orderId']?.toString() ?? '-'),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: GoogleFonts.poppins(
+                        fontSize: 10.5,
+                        color: const Color(0xFF64748B),
+                        height: 1.25,
+                      ),
+                    ),
+                    const SizedBox(height: 3),
+                    Text(
+                      isEmptyState
+                          ? 'Belum ada pesanan aktif'
+                          : '${order!['serviceName']} (${order['weight']})',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: GoogleFonts.poppins(
+                        fontSize: 12.5,
+                        fontWeight: FontWeight.w700,
+                        color: const Color(0xFF1E293B),
+                        height: 1.25,
+                      ),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      isEmptyState
+                          ? 'Ketuk untuk mulai pesan laundry'
+                          : 'Estimasi selesai',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: GoogleFonts.poppins(
+                        fontSize: 9.5,
+                        color: const Color(0xFF94A3B8),
+                        height: 1.2,
+                      ),
+                    ),
+                    if (!isEmptyState)
+                      Text(
+                        order?['estimate']?.toString() ?? '-',
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: GoogleFonts.poppins(
+                          fontSize: 11,
+                          fontWeight: FontWeight.w600,
+                          color: const Color(0xFF0284C7),
+                          height: 1.25,
+                        ),
+                      ),
+                  ],
+                ),
+              ),
+              const SizedBox(width: 6),
+              Container(
+                width: 30,
+                height: 30,
+                decoration: const BoxDecoration(
+                  color: Color(0xFFF1F5F9),
+                  shape: BoxShape.circle,
+                ),
+                child: const Icon(
+                  Icons.arrow_forward_ios_rounded,
+                  size: 13,
+                  color: Color(0xFF1B4E6C),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildActiveOrdersSection() {
+    if (_isLoadingOrder && _activeOrders.isEmpty) {
+      return Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
+        child: Container(
+          height: 144,
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(24),
+            border: Border.all(
+              color: Colors.white.withOpacity(0.8),
+              width: 1.5,
+            ),
+            boxShadow: [
+              BoxShadow(
+                color: const Color(0xFF1B4E6C).withOpacity(0.08),
+                blurRadius: 20,
+                offset: const Offset(0, 8),
+              ),
+            ],
+          ),
+          child: const Center(
+            child: CircularProgressIndicator(color: Color(0xFF338CA8)),
+          ),
+        ),
+      );
+    }
+
+    if (_activeOrders.isEmpty) {
+      return Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
+        child: SizedBox(
+          height: 144,
+          child: _buildActiveOrderCard(isEmptyState: true),
+        ),
+      );
+    }
+
+    final bool hasMultiple = _activeOrders.length > 1;
+
+    return Column(
+      children: [
+        SizedBox(
+          height: 144,
+          child: PageView.builder(
+            controller: _orderPageController,
+            physics: const BouncingScrollPhysics(),
+            itemCount: _activeOrders.length,
+            onPageChanged: (index) {
+              setState(() => _currentOrderIndex = index);
+            },
+            itemBuilder: (context, index) {
+              final order =
+              Map<String, dynamic>.from(_activeOrders[index] as Map);
+              return Padding(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 20,
+                  vertical: 4,
+                ),
+                child: _buildActiveOrderCard(
+                  order: order,
+                  positionLabel:
+                  hasMultiple ? '${index + 1}/${_activeOrders.length}' : null,
+                  showStepControls: hasMultiple,
+                ),
+              );
+            },
+          ),
+        ),
+        if (hasMultiple) ...[
+          const SizedBox(height: 6),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: List.generate(_activeOrders.length, (index) {
+              final bool isActive = index == _currentOrderIndex;
+              return GestureDetector(
+                behavior: HitTestBehavior.opaque,
+                onTap: () => _goToOrderIndex(index),
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 3,
+                    vertical: 4,
+                  ),
+                  child: AnimatedContainer(
+                    duration: const Duration(milliseconds: 200),
+                    width: isActive ? 16 : 6,
+                    height: 6,
+                    decoration: BoxDecoration(
+                      color: isActive
+                          ? const Color(0xFF1B4E6C)
+                          : const Color(0xFF1B4E6C).withOpacity(0.25),
+                      borderRadius: BorderRadius.circular(99),
+                    ),
+                  ),
+                ),
+              );
+            }),
+          ),
+        ],
+      ],
+    );
   }
 
   @override
@@ -160,7 +541,7 @@ class _HomePageState extends State<HomePage> {
         child: RefreshIndicator(
           onRefresh: () async {
             await Future.wait([
-              _fetchActiveOrder(),
+              _fetchActiveOrders(),
               _fetchServices(),
             ]);
           },
@@ -193,7 +574,9 @@ class _HomePageState extends State<HomePage> {
                               ListenableBuilder(
                                 listenable: UserProfileStore.instance,
                                 builder: (context, _) => Text(
-                                  UserProfileStore.instance.name.split(' ').first,
+                                  UserProfileStore.instance.name
+                                      .split(' ')
+                                      .first,
                                   style: GoogleFonts.poppins(
                                     fontSize: 28,
                                     fontWeight: FontWeight.w800,
@@ -226,7 +609,9 @@ class _HomePageState extends State<HomePage> {
                           GestureDetector(
                             onTap: () {
                               Navigator.pushNamed(
-                                  context, '/order-notification');
+                                context,
+                                '/order-notification',
+                              );
                             },
                             child: Stack(
                               clipBehavior: Clip.none,
@@ -281,8 +666,8 @@ class _HomePageState extends State<HomePage> {
                               Border.all(color: Colors.white, width: 2.5),
                               boxShadow: [
                                 BoxShadow(
-                                  color:
-                                  const Color(0xFF1B4E6C).withOpacity(0.12),
+                                  color: const Color(0xFF1B4E6C)
+                                      .withOpacity(0.12),
                                   blurRadius: 14,
                                   offset: const Offset(0, 4),
                                 ),
@@ -301,157 +686,8 @@ class _HomePageState extends State<HomePage> {
                   ),
                 ),
 
-                // Card Pesanan Aktif
-                Padding(
-                  padding:
-                  const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
-                  child: Material(
-                    color: Colors.transparent,
-                    child: InkWell(
-                      onTap: _navigateToStatusPesanan,
-                      borderRadius: BorderRadius.circular(24),
-                      child: Container(
-                        padding: const EdgeInsets.all(16),
-                        decoration: BoxDecoration(
-                          color: Colors.white,
-                          borderRadius: BorderRadius.circular(24),
-                          border: Border.all(
-                            color: Colors.white.withOpacity(0.8),
-                            width: 1.5,
-                          ),
-                          boxShadow: [
-                            BoxShadow(
-                              color: const Color(0xFF1B4E6C).withOpacity(0.08),
-                              blurRadius: 20,
-                              offset: const Offset(0, 8),
-                            ),
-                          ],
-                        ),
-                        child: Row(
-                          children: [
-                            Container(
-                              width: 82,
-                              height: 82,
-                              padding: const EdgeInsets.all(6),
-                              decoration: BoxDecoration(
-                                gradient: const LinearGradient(
-                                  colors: [
-                                    Color(0xFFE0F2FE),
-                                    Color(0xFFBAE6FD)
-                                  ],
-                                  begin: Alignment.topLeft,
-                                  end: Alignment.bottomRight,
-                                ),
-                                borderRadius: BorderRadius.circular(20),
-                              ),
-                              child: Image.asset(
-                                activeOrderData?['image'] ??
-                                    'assets/laundrykiloan.PNG',
-                                fit: BoxFit.contain,
-                                errorBuilder: (context, error, stackTrace) =>
-                                const Icon(
-                                  Icons.local_laundry_service_rounded,
-                                  size: 42,
-                                  color: Color(0xFF0284C7),
-                                ),
-                              ),
-                            ),
-                            const SizedBox(width: 14),
-                            Expanded(
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Row(
-                                    mainAxisAlignment:
-                                    MainAxisAlignment.spaceBetween,
-                                    children: [
-                                      Text(
-                                        'Pesanan Aktif',
-                                        style: GoogleFonts.poppins(
-                                          fontSize: 14.5,
-                                          fontWeight: FontWeight.w700,
-                                          color: const Color(0xFF1B4E6C),
-                                        ),
-                                      ),
-                                      Container(
-                                        padding: const EdgeInsets.symmetric(
-                                          horizontal: 9,
-                                          vertical: 3.5,
-                                        ),
-                                        decoration: BoxDecoration(
-                                          color: const Color(0xFFF3E8FF),
-                                          borderRadius:
-                                          BorderRadius.circular(8),
-                                        ),
-                                        child: Text(
-                                          activeOrderData?['status'] ??
-                                              'Tidak Ada',
-                                          style: GoogleFonts.poppins(
-                                            fontSize: 10.5,
-                                            fontWeight: FontWeight.w600,
-                                            color: const Color(0xFF7E22CE),
-                                          ),
-                                        ),
-                                      ),
-                                    ],
-                                  ),
-                                  Text(
-                                    activeOrderData?['orderId'] ?? '-',
-                                    style: GoogleFonts.poppins(
-                                      fontSize: 11,
-                                      color: const Color(0xFF64748B),
-                                    ),
-                                  ),
-                                  const SizedBox(height: 5),
-                                  Text(
-                                    activeOrderData != null
-                                        ? '${activeOrderData!['serviceName']} (${activeOrderData!['weight']})'
-                                        : 'Belum ada pesanan aktif',
-                                    style: GoogleFonts.poppins(
-                                      fontSize: 13,
-                                      fontWeight: FontWeight.w700,
-                                      color: const Color(0xFF1E293B),
-                                    ),
-                                  ),
-                                  const SizedBox(height: 2),
-                                  Text(
-                                    'Estimasi selesai',
-                                    style: GoogleFonts.poppins(
-                                      fontSize: 10,
-                                      color: const Color(0xFF94A3B8),
-                                    ),
-                                  ),
-                                  Text(
-                                    activeOrderData?['estimate'] ?? '-',
-                                    style: GoogleFonts.poppins(
-                                      fontSize: 11.5,
-                                      fontWeight: FontWeight.w600,
-                                      color: const Color(0xFF0284C7),
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            ),
-                            const SizedBox(width: 6),
-                            Container(
-                              width: 32,
-                              height: 32,
-                              decoration: const BoxDecoration(
-                                color: Color(0xFFF1F5F9),
-                                shape: BoxShape.circle,
-                              ),
-                              child: const Icon(
-                                Icons.arrow_forward_ios_rounded,
-                                size: 13,
-                                color: Color(0xFF1B4E6C),
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ),
-                  ),
-                ),
+                // Card Pesanan Aktif (Swipeable Carousel + Klik Panah/Dot)
+                _buildActiveOrdersSection(),
 
                 // Sub-header Katalog Layanan
                 Padding(
