@@ -6,7 +6,6 @@ import 'user_session.dart';
 class _C {
   static const headerBlue = Color(0xFFD6EFFB);
   static const navy = Color(0xFF1F3A6E);
-  static const button = Color(0xFF263F73);
   static const bubbleUser = Color(0xFF338CA8);
   static const bubbleAdmin = Color(0xFFF1F5F9);
 }
@@ -30,6 +29,7 @@ class _ChatRoomPageState extends State<ChatRoomPage> {
   String _orderId = '#LKN4wa123';
   String _serviceName = 'Laundry Kiloan 5 kg';
   String _status = 'Diproses';
+  String _resolvedCustomerName = '';
 
   @override
   void didChangeDependencies() {
@@ -38,7 +38,7 @@ class _ChatRoomPageState extends State<ChatRoomPage> {
     _initializedArgs = true;
 
     final args =
-    ModalRoute.of(context)?.settings.arguments as Map<String, dynamic>?;
+        ModalRoute.of(context)?.settings.arguments as Map<String, dynamic>?;
 
     if (args != null) {
       final rawOrderId = args['orderId']?.toString().trim();
@@ -55,22 +55,69 @@ class _ChatRoomPageState extends State<ChatRoomPage> {
       }
     }
 
+    _resolveCustomerName();
     _markAdminMessagesAsRead();
   }
 
-  String get _currentUserName {
+  Future<void> _resolveCustomerName() async {
+    // 1. Cek dari UserSession
+    final sessionName = (UserSession.name ?? '').trim();
+    if (sessionName.isNotEmpty &&
+        sessionName.toLowerCase() != 'customer' &&
+        sessionName.toLowerCase() != 'pelanggan') {
+      _resolvedCustomerName = sessionName;
+      return;
+    }
+
+    // 2. Cek dari tabel orders berdasarkan order_code
     try {
-      final dynamic session = UserSession;
-      final name = (session.userName ??
-          session.fullName ??
-          session.name ??
-          session.email ??
-          'Customer')
-          .toString()
-          .trim();
-      return name.isEmpty ? 'Customer' : name;
-    } catch (_) {
-      return 'Customer';
+      final orderRow = await _supabase
+          .from('orders')
+          .select('customer_name, user_id')
+          .eq('order_code', _orderId)
+          .maybeSingle();
+
+      if (orderRow != null) {
+        final cName = (orderRow['customer_name'] ?? '').toString().trim();
+        if (cName.isNotEmpty &&
+            cName.toLowerCase() != 'customer' &&
+            cName.toLowerCase() != 'pelanggan') {
+          _resolvedCustomerName = cName;
+          return;
+        }
+
+        final uid = (orderRow['user_id'] ?? UserSession.userId ?? '')
+            .toString()
+            .trim();
+        if (uid.isNotEmpty) {
+          final userRow = await _supabase
+              .from('users')
+              .select('name, full_name, username, email')
+              .eq('id', uid)
+              .maybeSingle();
+          if (userRow != null) {
+            final uName = (userRow['name'] ??
+                    userRow['full_name'] ??
+                    userRow['username'] ??
+                    '')
+                .toString()
+                .trim();
+            if (uName.isNotEmpty) {
+              _resolvedCustomerName = uName;
+              return;
+            }
+          }
+        }
+      }
+    } catch (_) {}
+
+    if (_resolvedCustomerName.isEmpty) {
+      final email = (UserSession.email ?? '').trim();
+      if (email.contains('@')) {
+        _resolvedCustomerName = email.split('@').first;
+      } else {
+        _resolvedCustomerName = 'Pelanggan';
+      }
     }
   }
 
@@ -97,11 +144,15 @@ class _ChatRoomPageState extends State<ChatRoomPage> {
     setState(() => _isSending = true);
     _msgController.clear();
 
+    if (_resolvedCustomerName.isEmpty) {
+      await _resolveCustomerName();
+    }
+
     try {
       await _supabase.from('messages').insert({
         'order_code': _orderId,
         'sender_role': 'customer',
-        'sender_name': _currentUserName,
+        'sender_name': _resolvedCustomerName,
         'message_text': text,
         'is_read': false,
       });
@@ -219,7 +270,6 @@ class _ChatRoomPageState extends State<ChatRoomPage> {
       ),
       body: Column(
         children: [
-          // Banner Ringkasan Pesanan
           Container(
             padding: const EdgeInsets.symmetric(
               horizontal: 16,
@@ -304,15 +354,6 @@ class _ChatRoomPageState extends State<ChatRoomPage> {
                         'orderId': _orderId,
                         'serviceName': _serviceName,
                         'status': _status,
-                        'weight': '5.0 kg',
-                        'treatment': 'Cuci + Setrika',
-                        'perfume': 'Ocean Fresh',
-                        'detergent': 'Anti Bakteri',
-                        'method': 'Antar Jemput Driver',
-                        'address': 'Jl. Ketintang Baru No. 12, Surabaya',
-                        'totalPrice': 'Rp 35.000',
-                        'estimate': '18 April 2027, 08.00',
-                        'image': 'assets/laundrykiloan.PNG',
                       },
                     );
                   },
@@ -329,7 +370,6 @@ class _ChatRoomPageState extends State<ChatRoomPage> {
             ),
           ),
 
-          // Daftar Pesan Chat
           Expanded(
             child: StreamBuilder(
               stream: messageStream,
@@ -371,8 +411,8 @@ class _ChatRoomPageState extends State<ChatRoomPage> {
                 }
 
                 final hasUnreadAdmin = messages.any(
-                      (m) =>
-                  m['sender_role']?.toString() == 'admin' &&
+                  (m) =>
+                      m['sender_role']?.toString() == 'admin' &&
                       m['is_read'] == false,
                 );
                 if (hasUnreadAdmin && !_isMarkingRead) {
@@ -407,12 +447,12 @@ class _ChatRoomPageState extends State<ChatRoomPage> {
                     final bool isUser =
                         msg['sender_role']?.toString() == 'customer';
                     final String textContent =
-                    (msg['message_text'] ?? '').toString();
+                        (msg['message_text'] ?? '').toString();
                     final String timeContent = _formatTime(msg['created_at']);
 
                     return Align(
                       alignment:
-                      isUser ? Alignment.centerRight : Alignment.centerLeft,
+                          isUser ? Alignment.centerRight : Alignment.centerLeft,
                       child: Container(
                         margin: const EdgeInsets.only(bottom: 12),
                         constraints: BoxConstraints(
@@ -476,7 +516,6 @@ class _ChatRoomPageState extends State<ChatRoomPage> {
             ),
           ),
 
-          // Input Text Bar Bawah
           Container(
             padding: EdgeInsets.fromLTRB(
               16,
@@ -520,7 +559,7 @@ class _ChatRoomPageState extends State<ChatRoomPage> {
                 ),
                 const SizedBox(width: 8),
                 GestureDetector(
-                  onTap: _isSending ? null : _sendMessage,
+                  onTap: _isSending ? null : () => _sendMessage(),
                   child: Container(
                     padding: const EdgeInsets.all(11),
                     decoration: const BoxDecoration(
@@ -529,18 +568,18 @@ class _ChatRoomPageState extends State<ChatRoomPage> {
                     ),
                     child: _isSending
                         ? const SizedBox(
-                      width: 18,
-                      height: 18,
-                      child: CircularProgressIndicator(
-                        strokeWidth: 2,
-                        color: Colors.white,
-                      ),
-                    )
+                            width: 18,
+                            height: 18,
+                            child: CircularProgressIndicator(
+                              strokeWidth: 2,
+                              color: Colors.white,
+                            ),
+                          )
                         : const Icon(
-                      Icons.send_rounded,
-                      size: 18,
-                      color: Colors.white,
-                    ),
+                            Icons.send_rounded,
+                            size: 18,
+                            color: Colors.white,
+                          ),
                   ),
                 ),
               ],

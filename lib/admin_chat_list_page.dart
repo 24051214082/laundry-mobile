@@ -13,10 +13,10 @@ class AdminChatListPage extends StatefulWidget {
   const AdminChatListPage({super.key});
 
   @override
-  State<AdminChatListPage> createState() => _AdminChatListPageState();
+  State createState() => _AdminChatListPageState();
 }
 
-class _AdminChatListPageState extends State<AdminChatListPage> {
+class _AdminChatListPageState extends State {
   final _supabase = Supabase.instance.client;
   final TextEditingController _searchController = TextEditingController();
   String _searchQuery = '';
@@ -42,100 +42,157 @@ class _AdminChatListPageState extends State<AdminChatListPage> {
     return '${dt.day.toString().padLeft(2, '0')}/${dt.month.toString().padLeft(2, '0')}';
   }
 
-  Future<void> _loadAdminChats() async {
+  bool _isGenericName(String name) {
+    final lower = name.trim().toLowerCase();
+    return lower.isEmpty ||
+        lower == 'customer' ||
+        lower == 'pelanggan' ||
+        lower == 'user';
+  }
+
+  String _getInitials(String name) {
+    final parts = name.trim().split(RegExp(r'\s+'));
+    if (parts.isEmpty || parts.first.isEmpty) return 'P';
+    if (parts.length == 1) return parts.first[0].toUpperCase();
+    return '${parts.first[0]}${parts[1][0]}'.toUpperCase();
+  }
+
+  Future _loadAdminChats() async {
     setState(() => _isLoading = true);
     try {
+      // 1. Peta nama user berdasarkan user_id dari tabel users
+      final userNameById = {};
+      try {
+        final usersRes = await _supabase
+            .from('users')
+            .select('id, name, full_name, username, email');
+        for (final row in usersRes) {
+          final u = Map.from(row as Map);
+          final uid = (u['id'] ?? '').toString().trim();
+          if (uid.isEmpty) continue;
+          final rawName =
+              (u['name'] ?? u['full_name'] ?? u['username'] ?? '')
+                  .toString()
+                  .trim();
+          if (!_isGenericName(rawName)) {
+            userNameById[uid] = rawName;
+          } else {
+            final email = (u['email'] ?? '').toString().trim();
+            if (email.contains('@')) {
+              userNameById[uid] = email.split('@').first;
+            }
+          }
+        }
+      } catch (_) {}
+
+      // 2. Info pesanan berdasarkan order_code dari tabel orders
       final orderInfoByCode = {};
       try {
-        final ordersRes = await _supabase
-            .from('orders')
-            .select('order_code, service_name, speed, status, customer_name');
+        final ordersRes = await _supabase.from('orders').select(
+            'order_code, service_name, speed, status, customer_name, user_id');
 
-        for (final row in (ordersRes as List)) {
-          final map = Map<String, dynamic>.from(row as Map);
+        for (final row in ordersRes) {
+          final map = Map.from(row as Map);
           final code = (map['order_code'] ?? '').toString().trim();
           if (code.isEmpty) continue;
+
+          final uid = (map['user_id'] ?? '').toString().trim();
+          String cName = (map['customer_name'] ?? '').toString().trim();
+          if (_isGenericName(cName) && uid.isNotEmpty) {
+            cName = (userNameById[uid] ?? '').toString();
+          }
+
           final svc = (map['service_name'] ?? 'Laundry').toString();
           final spd = (map['speed'] ?? '').toString();
           orderInfoByCode[code] = {
-            'customerName': (map['customer_name'] ?? '').toString().trim(),
+            'userId': uid,
+            'customerName': cName,
             'serviceName': spd.isNotEmpty ? '$svc - $spd' : svc,
             'status': (map['status'] ?? 'Diproses').toString(),
           };
         }
       } catch (_) {}
 
+      // 3. Ambil seluruh pesan, urutkan dari terbaru
       final msgRes = await _supabase
           .from('messages')
           .select()
           .order('created_at', ascending: false);
 
-      final grouped = {};
-      for (final row in (msgRes as List)) {
-        final map = Map<String, dynamic>.from(row as Map);
-        final code = (map['order_code'] ?? '').toString().trim();
+      // 4. Kelompokkan 1 Customer = 1 Room Chat
+      final customerGroups = {};
+
+      for (final row in msgRes) {
+        final m = Map.from(row as Map);
+        final code = (m['order_code'] ?? '').toString().trim();
         if (code.isEmpty) continue;
-        if (!grouped.containsKey(code)) {
-          grouped[code] = [];
-        }
-        (grouped[code] as List).add(map);
-      }
-
-      final threads = [];
-      for (final entry in grouped.entries) {
-        final code = entry.key.toString();
-        final msgs = (entry.value as List);
-        if (msgs.isEmpty) continue;
-
-        final latest = Map<String, dynamic>.from(msgs.first as Map);
-        String customerName = '';
-
-        for (final item in msgs) {
-          final m = Map<String, dynamic>.from(item as Map);
-          if (m['sender_role']?.toString() == 'customer') {
-            final sName = (m['sender_name'] ?? '').toString().trim();
-            if (sName.isNotEmpty) {
-              customerName = sName;
-              break;
-            }
-          }
-        }
 
         final orderMeta = orderInfoByCode[code] is Map
-            ? Map<String, dynamic>.from(orderInfoByCode[code] as Map)
+            ? Map.from(orderInfoByCode[code] as Map)
             : {};
+        final uid = (orderMeta['userId'] ?? '').toString().trim();
 
-        if (customerName.isEmpty) {
-          customerName = (orderMeta['customerName'] ?? '').toString().trim();
+        String customerName = (orderMeta['customerName'] ?? '').toString().trim();
+        if (_isGenericName(customerName) &&
+            m['sender_role']?.toString() == 'customer') {
+          final sName = (m['sender_name'] ?? '').toString().trim();
+          if (!_isGenericName(sName)) {
+            customerName = sName;
+          }
         }
-        if (customerName.isEmpty) {
+        if (_isGenericName(customerName)) {
           customerName = 'Pelanggan';
         }
 
-        int unreadCount = 0;
-        for (final item in msgs) {
-          final m = Map<String, dynamic>.from(item as Map);
-          if (m['sender_role']?.toString() == 'customer' &&
-              m['is_read'] == false) {
-            unreadCount++;
-          }
+        final String customerKey = uid.isNotEmpty
+            ? 'uid:$uid'
+            : 'name:${customerName.toLowerCase()}';
+
+        if (!customerGroups.containsKey(customerKey)) {
+          customerGroups[customerKey] = {
+            'customerKey': customerKey,
+            'userId': uid,
+            'customerName': customerName,
+            'latestOrderCode': code,
+            'latestServiceName':
+                (orderMeta['serviceName'] ?? 'Laundry').toString(),
+            'latestStatus': (orderMeta['status'] ?? 'Diproses').toString(),
+            'lastMessage': (m['message_text'] ?? '').toString(),
+            'lastSenderRole': (m['sender_role'] ?? '').toString(),
+            'time': _formatTime(m['created_at']),
+            'unreadCount': 0,
+            'orderCodes': [],
+            'ordersMeta': [],
+          };
         }
 
-        threads.add({
-          'customerName': customerName,
-          'orderId': code,
-          'serviceName':
-          (orderMeta['serviceName'] ?? 'Laundry Kiloan').toString(),
-          'status': (orderMeta['status'] ?? 'Diproses').toString(),
-          'lastMessage': (latest['message_text'] ?? '').toString(),
-          'time': _formatTime(latest['created_at']),
-          'unreadCount': unreadCount,
-        });
+        final group = customerGroups[customerKey] as Map;
+
+        if (_isGenericName(group['customerName'].toString()) &&
+            !_isGenericName(customerName)) {
+          group['customerName'] = customerName;
+        }
+
+        final codes = group['orderCodes'] as List;
+        if (!codes.contains(code)) {
+          codes.add(code);
+          (group['ordersMeta'] as List).add({
+            'orderId': code,
+            'serviceName':
+                (orderMeta['serviceName'] ?? 'Laundry').toString(),
+            'status': (orderMeta['status'] ?? 'Diproses').toString(),
+          });
+        }
+
+        if (m['sender_role']?.toString() == 'customer' &&
+            m['is_read'] == false) {
+          group['unreadCount'] = ((group['unreadCount'] as int?) ?? 0) + 1;
+        }
       }
 
       if (!mounted) return;
       setState(() {
-        _chatList = threads;
+        _chatList = customerGroups.values.toList();
         _isLoading = false;
       });
     } catch (e) {
@@ -161,13 +218,12 @@ class _AdminChatListPageState extends State<AdminChatListPage> {
 
   @override
   Widget build(BuildContext context) {
-    // Filter pencarian nama pelanggan atau ID pesanan
     final filteredChats = _chatList.where((item) {
-      final chat = Map<String, dynamic>.from(item as Map);
+      final chat = Map.from(item as Map);
       final name = (chat['customerName'] ?? '').toString().toLowerCase();
-      final orderId = (chat['orderId'] ?? '').toString().toLowerCase();
+      final codes = (chat['orderCodes'] as List).join(' ').toLowerCase();
       final query = _searchQuery.toLowerCase();
-      return name.contains(query) || orderId.contains(query);
+      return name.contains(query) || codes.contains(query);
     }).toList();
 
     return Scaffold(
@@ -186,20 +242,50 @@ class _AdminChatListPageState extends State<AdminChatListPage> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(
-                    'Pesan Pelanggan',
-                    style: GoogleFonts.poppins(
-                      fontSize: 22,
-                      fontWeight: FontWeight.w800,
-                      color: _C.navy,
-                    ),
-                  ),
-                  Text(
-                    'Kelola percakapan dan pertanyaan pesanan customer',
-                    style: GoogleFonts.poppins(
-                      fontSize: 11.5,
-                      color: const Color(0xFF2E637E),
-                    ),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              'Pesan Pelanggan',
+                              style: GoogleFonts.poppins(
+                                fontSize: 22,
+                                fontWeight: FontWeight.w800,
+                                color: _C.navy,
+                              ),
+                            ),
+                            Text(
+                              '1 ruang obrolan per pelanggan beserta konteks pesanannya',
+                              style: GoogleFonts.poppins(
+                                fontSize: 11.5,
+                                color: const Color(0xFF2E637E),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      if (!_isLoading)
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 10,
+                            vertical: 5,
+                          ),
+                          decoration: BoxDecoration(
+                            color: Colors.white.withValues(alpha: 0.85),
+                            borderRadius: BorderRadius.circular(20),
+                          ),
+                          child: Text(
+                            '${_chatList.length} Pelanggan',
+                            style: GoogleFonts.poppins(
+                              fontSize: 11,
+                              fontWeight: FontWeight.w700,
+                              color: _C.navy,
+                            ),
+                          ),
+                        ),
+                    ],
                   ),
                   const SizedBox(height: 14),
                   Container(
@@ -219,7 +305,7 @@ class _AdminChatListPageState extends State<AdminChatListPage> {
                       onChanged: (val) => setState(() => _searchQuery = val),
                       style: GoogleFonts.poppins(fontSize: 12.5),
                       decoration: InputDecoration(
-                        hintText: 'Cari nama pelanggan atau ID pesanan...',
+                        hintText: 'Cari nama pelanggan atau kode pesanan...',
                         hintStyle: GoogleFonts.poppins(
                           fontSize: 12,
                           color: const Color(0xFF94A3B8),
@@ -230,7 +316,8 @@ class _AdminChatListPageState extends State<AdminChatListPage> {
                           size: 22,
                         ),
                         border: InputBorder.none,
-                        contentPadding: const EdgeInsets.symmetric(vertical: 12),
+                        contentPadding:
+                            const EdgeInsets.symmetric(vertical: 12),
                       ),
                     ),
                   ),
@@ -239,212 +326,241 @@ class _AdminChatListPageState extends State<AdminChatListPage> {
             ),
           ),
 
-          // Daftar Kartu Percakapan
+          // Daftar Kartu Percakapan per Customer
           Expanded(
             child: _isLoading
                 ? const Center(
-              child: CircularProgressIndicator(color: _C.teal),
-            )
+                    child: CircularProgressIndicator(color: _C.teal),
+                  )
                 : RefreshIndicator(
-              onRefresh: _loadAdminChats,
-              color: _C.teal,
-              child: filteredChats.isEmpty
-                  ? ListView(
-                physics: const AlwaysScrollableScrollPhysics(),
-                children: [
-                  SizedBox(
-                    height:
-                    MediaQuery.of(context).size.height * 0.35,
-                    child: Center(
-                      child: Text(
-                        'Belum ada pesan pelanggan',
-                        style: GoogleFonts.poppins(
-                          fontSize: 12.5,
-                          color: const Color(0xFF64748B),
-                        ),
-                      ),
-                    ),
-                  ),
-                ],
-              )
-                  : ListView.separated(
-                padding: const EdgeInsets.all(16),
-                physics: const BouncingScrollPhysics(
-                  parent: AlwaysScrollableScrollPhysics(),
-                ),
-                itemCount: filteredChats.length,
-                separatorBuilder: (_, __) =>
-                const SizedBox(height: 10),
-                itemBuilder: (context, index) {
-                  final chat = Map<String, dynamic>.from(
-                    filteredChats[index] as Map,
-                  );
-                  final int unread =
-                      (chat['unreadCount'] as int?) ?? 0;
-
-                  return InkWell(
-                    onTap: () async {
-                      // Lempar data pelanggan & pesanan ke AdminChatRoomPage
-                      await Navigator.pushNamed(
-                        context,
-                        '/admin-chat-room',
-                        arguments: {
-                          'customerName': chat['customerName'],
-                          'orderId': chat['orderId'],
-                          'serviceName': chat['serviceName'],
-                          'status': chat['status'],
-                        },
-                      );
-                      if (mounted) {
-                        _loadAdminChats();
-                      }
-                    },
-                    borderRadius: BorderRadius.circular(16),
-                    child: Container(
-                      padding: const EdgeInsets.all(14),
-                      decoration: BoxDecoration(
-                        color: Colors.white,
-                        borderRadius: BorderRadius.circular(16),
-                        border: Border.all(
-                          color: unread > 0
-                              ? const Color(0xFFBAE6FD)
-                              : const Color(0xFFF1F5F9),
-                        ),
-                        boxShadow: [
-                          BoxShadow(
-                            color: Colors.black
-                                .withValues(alpha: 0.03),
-                            blurRadius: 6,
-                            offset: const Offset(0, 2),
-                          ),
-                        ],
-                      ),
-                      child: Row(
-                        children: [
-                          // Avatar Pelanggan
-                          const CircleAvatar(
-                            radius: 24,
-                            backgroundColor: Color(0xFF4285F4),
-                            child: Icon(
-                              Icons.person_rounded,
-                              color: Colors.white,
-                              size: 28,
-                            ),
-                          ),
-                          const SizedBox(width: 12),
-
-                          // Info Nama, Badge Order, dan Cuplikan Pesan
-                          Expanded(
-                            child: Column(
-                              crossAxisAlignment:
-                              CrossAxisAlignment.start,
-                              children: [
-                                Row(
-                                  children: [
-                                    Text(
-                                      chat['customerName']
-                                          .toString(),
-                                      style: GoogleFonts.poppins(
-                                        fontSize: 14,
-                                        fontWeight: FontWeight.w700,
-                                        color: _C.navy,
-                                      ),
-                                    ),
-                                    const SizedBox(width: 6),
-                                    Container(
-                                      padding:
-                                      const EdgeInsets.symmetric(
-                                        horizontal: 7,
-                                        vertical: 2,
-                                      ),
-                                      decoration: BoxDecoration(
-                                        color: _C.headerBlue,
-                                        borderRadius:
-                                        BorderRadius.circular(6),
-                                      ),
-                                      child: Text(
-                                        chat['orderId'].toString(),
-                                        style: GoogleFonts.poppins(
-                                          fontSize: 9.5,
-                                          fontWeight: FontWeight.w600,
-                                          color: _C.navy,
-                                        ),
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                                const SizedBox(height: 4),
-                                Text(
-                                  chat['lastMessage'].toString(),
-                                  maxLines: 1,
-                                  overflow: TextOverflow.ellipsis,
-                                  style: GoogleFonts.poppins(
-                                    fontSize: 11.5,
-                                    fontWeight: unread > 0
-                                        ? FontWeight.w600
-                                        : FontWeight.w400,
-                                    color: unread > 0
-                                        ? const Color(0xFF1E293B)
-                                        : const Color(0xFF64748B),
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
-                          const SizedBox(width: 8),
-
-                          // Waktu & Badge Belum Dibaca
-                          Column(
-                            crossAxisAlignment:
-                            CrossAxisAlignment.end,
+                    onRefresh: _loadAdminChats,
+                    color: _C.teal,
+                    child: filteredChats.isEmpty
+                        ? ListView(
+                            physics: const AlwaysScrollableScrollPhysics(),
                             children: [
-                              Text(
-                                chat['time'].toString(),
-                                style: GoogleFonts.poppins(
-                                  fontSize: 10,
-                                  fontWeight: unread > 0
-                                      ? FontWeight.w600
-                                      : FontWeight.w400,
-                                  color: unread > 0
-                                      ? _C.teal
-                                      : const Color(0xFF94A3B8),
+                              SizedBox(
+                                height:
+                                    MediaQuery.of(context).size.height * 0.35,
+                                child: Center(
+                                  child: Text(
+                                    'Belum ada pesan pelanggan',
+                                    style: GoogleFonts.poppins(
+                                      fontSize: 12.5,
+                                      color: const Color(0xFF64748B),
+                                    ),
+                                  ),
                                 ),
                               ),
-                              const SizedBox(height: 6),
-                              if (unread > 0)
-                                Container(
-                                  padding: const EdgeInsets.symmetric(
-                                    horizontal: 7,
-                                    vertical: 2,
-                                  ),
-                                  decoration: const BoxDecoration(
-                                    color: _C.teal,
-                                    shape: BoxShape.circle,
-                                  ),
-                                  child: Text(
-                                    unread.toString(),
-                                    style: GoogleFonts.poppins(
-                                      fontSize: 10,
-                                      fontWeight: FontWeight.w700,
-                                      color: Colors.white,
-                                    ),
-                                  ),
-                                )
-                              else
-                                const SizedBox(height: 18),
                             ],
+                          )
+                        : ListView.separated(
+                            padding: const EdgeInsets.all(16),
+                            physics: const BouncingScrollPhysics(
+                              parent: AlwaysScrollableScrollPhysics(),
+                            ),
+                            itemCount: filteredChats.length,
+                            separatorBuilder: (_, __) =>
+                                const SizedBox(height: 10),
+                            itemBuilder: (context, index) {
+                              final chat =
+                                  Map.from(filteredChats[index] as Map);
+                              final int unread =
+                                  (chat['unreadCount'] as int?) ?? 0;
+                              final String customerName =
+                                  chat['customerName'].toString();
+                              final orderCodes = chat['orderCodes'] as List;
+                              final String latestOrderCode =
+                                  chat['latestOrderCode'].toString();
+                              final bool isAdminLast =
+                                  chat['lastSenderRole'] == 'admin';
+
+                              return InkWell(
+                                onTap: () async {
+                                  await Navigator.pushNamed(
+                                    context,
+                                    '/admin-chat-room',
+                                    arguments: {
+                                      'customerName': customerName,
+                                      'userId': chat['userId'],
+                                      'orderId': latestOrderCode,
+                                      'serviceName': chat['latestServiceName'],
+                                      'status': chat['latestStatus'],
+                                      'orderCodes': orderCodes,
+                                      'ordersMeta': chat['ordersMeta'],
+                                    },
+                                  );
+                                  if (mounted) {
+                                    _loadAdminChats();
+                                  }
+                                },
+                                borderRadius: BorderRadius.circular(18),
+                                child: Container(
+                                  padding: const EdgeInsets.all(14),
+                                  decoration: BoxDecoration(
+                                    color: Colors.white,
+                                    borderRadius: BorderRadius.circular(18),
+                                    border: Border.all(
+                                      color: unread > 0
+                                          ? const Color(0xFF7DD3FC)
+                                          : const Color(0xFFE2E8F0),
+                                      width: unread > 0 ? 1.4 : 1,
+                                    ),
+                                    boxShadow: [
+                                      BoxShadow(
+                                        color: Colors.black
+                                            .withValues(alpha: 0.03),
+                                        blurRadius: 6,
+                                        offset: const Offset(0, 2),
+                                      ),
+                                    ],
+                                  ),
+                                  child: Row(
+                                    children: [
+                                      CircleAvatar(
+                                        radius: 25,
+                                        backgroundColor:
+                                            const Color(0xFF338CA8),
+                                        child: Text(
+                                          _getInitials(customerName),
+                                          style: GoogleFonts.poppins(
+                                            fontSize: 15,
+                                            fontWeight: FontWeight.w700,
+                                            color: Colors.white,
+                                          ),
+                                        ),
+                                      ),
+                                      const SizedBox(width: 12),
+                                      Expanded(
+                                        child: Column(
+                                          crossAxisAlignment:
+                                              CrossAxisAlignment.start,
+                                          children: [
+                                            Row(
+                                              children: [
+                                                Flexible(
+                                                  child: Text(
+                                                    customerName,
+                                                    maxLines: 1,
+                                                    overflow:
+                                                        TextOverflow.ellipsis,
+                                                    style: GoogleFonts.poppins(
+                                                      fontSize: 14.5,
+                                                      fontWeight:
+                                                          FontWeight.w700,
+                                                      color: _C.navy,
+                                                    ),
+                                                  ),
+                                                ),
+                                                const SizedBox(width: 6),
+                                                Container(
+                                                  padding: const EdgeInsets
+                                                      .symmetric(
+                                                    horizontal: 7,
+                                                    vertical: 2,
+                                                  ),
+                                                  decoration: BoxDecoration(
+                                                    color: _C.headerBlue,
+                                                    borderRadius:
+                                                        BorderRadius.circular(
+                                                            6),
+                                                  ),
+                                                  child: Text(
+                                                    orderCodes.length > 1
+                                                        ? '$latestOrderCode (+${orderCodes.length - 1})'
+                                                        : latestOrderCode,
+                                                    style: GoogleFonts.poppins(
+                                                      fontSize: 9.5,
+                                                      fontWeight:
+                                                          FontWeight.w600,
+                                                      color: _C.navy,
+                                                    ),
+                                                  ),
+                                                ),
+                                              ],
+                                            ),
+                                            const SizedBox(height: 2),
+                                            Text(
+                                              chat['latestServiceName']
+                                                  .toString(),
+                                              maxLines: 1,
+                                              overflow: TextOverflow.ellipsis,
+                                              style: GoogleFonts.poppins(
+                                                fontSize: 10.5,
+                                                fontWeight: FontWeight.w500,
+                                                color: _C.teal,
+                                              ),
+                                            ),
+                                            const SizedBox(height: 3),
+                                            Text(
+                                              '${isAdminLast ? 'Anda: ' : ''}${chat['lastMessage']}',
+                                              maxLines: 1,
+                                              overflow: TextOverflow.ellipsis,
+                                              style: GoogleFonts.poppins(
+                                                fontSize: 11.5,
+                                                fontWeight: unread > 0
+                                                    ? FontWeight.w600
+                                                    : FontWeight.w400,
+                                                color: unread > 0
+                                                    ? const Color(0xFF1E293B)
+                                                    : const Color(0xFF64748B),
+                                              ),
+                                            ),
+                                          ],
+                                        ),
+                                      ),
+                                      const SizedBox(width: 8),
+                                      Column(
+                                        crossAxisAlignment:
+                                            CrossAxisAlignment.end,
+                                        children: [
+                                          Text(
+                                            chat['time'].toString(),
+                                            style: GoogleFonts.poppins(
+                                              fontSize: 10,
+                                              fontWeight: unread > 0
+                                                  ? FontWeight.w600
+                                                  : FontWeight.w400,
+                                              color: unread > 0
+                                                  ? _C.teal
+                                                  : const Color(0xFF94A3B8),
+                                            ),
+                                          ),
+                                          const SizedBox(height: 6),
+                                          if (unread > 0)
+                                            Container(
+                                              padding:
+                                                  const EdgeInsets.symmetric(
+                                                horizontal: 7,
+                                                vertical: 2,
+                                              ),
+                                              decoration: const BoxDecoration(
+                                                color: _C.teal,
+                                                shape: BoxShape.circle,
+                                              ),
+                                              child: Text(
+                                                unread.toString(),
+                                                style: GoogleFonts.poppins(
+                                                  fontSize: 10,
+                                                  fontWeight: FontWeight.w700,
+                                                  color: Colors.white,
+                                                ),
+                                              ),
+                                            )
+                                          else
+                                            const SizedBox(height: 18),
+                                        ],
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              );
+                            },
                           ),
-                        ],
-                      ),
-                    ),
-                  );
-                },
-              ),
-            ),
+                  ),
           ),
         ],
       ),
-      // Tetap menampilkan Bottom Nav Admin dengan tab Chat aktif (index: 1)
       bottomNavigationBar: const AdminBottomNav(currentIndex: 1),
     );
   }
