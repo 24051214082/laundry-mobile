@@ -7,26 +7,31 @@ import 'user_session.dart';
 class _C {
   static const headerBlue = Color(0xFFD6EFFB);
   static const navy = Color(0xFF1F3A6E);
-  static const textSub = Color(0xFF64748B);
-  static const primaryBlue = Color(0xFF338CA8);
+  static const teal = Color(0xFF338CA8);
 }
 
 class ChatListPage extends StatefulWidget {
   const ChatListPage({super.key});
 
   @override
-  State<ChatListPage> createState() => _ChatListPageState();
+  State createState() => _ChatListPageState();
 }
 
-class _ChatListPageState extends State<ChatListPage> {
+class _ChatListPageState extends State {
   final _supabase = Supabase.instance.client;
-  var _chatThreads = [];
   bool _isLoading = true;
+
+  var _userOrders = [];
+  String _lastMessage = 'Ketuk untuk mulai chat dengan Admin Wish You Wash';
+  String _lastMessageTime = '';
+  String _lastOrderCode = '';
+  bool _isAdminLast = false;
+  int _unreadAdminCount = 0;
 
   @override
   void initState() {
     super.initState();
-    _loadChatThreads();
+    _loadCustomerChatSummary();
   }
 
   String _formatTime(dynamic rawCreatedAt) {
@@ -42,362 +47,483 @@ class _ChatListPageState extends State<ChatListPage> {
     return '${dt.day.toString().padLeft(2, '0')}/${dt.month.toString().padLeft(2, '0')}';
   }
 
-  Future<void> _loadChatThreads() async {
+  Future _loadCustomerChatSummary() async {
     setState(() => _isLoading = true);
     try {
-      final orderMeta = {};
+      final uid = (UserSession.userId ?? '').trim();
+      final userName = (UserSession.name ?? '').trim().toLowerCase();
 
-      if (UserSession.userId != null && UserSession.userId!.isNotEmpty) {
-        final ordersRes = await _supabase
-            .from('orders')
-            .select('order_code, service_name, speed, status')
-            .eq('user_id', UserSession.userId!)
-            .order('created_at', ascending: false);
-
-        for (final row in (ordersRes as List)) {
-          final map = Map<String, dynamic>.from(row as Map);
-          final code = (map['order_code'] ?? '').toString().trim();
-          if (code.isEmpty) continue;
-          final svc = (map['service_name'] ?? 'Laundry').toString();
-          final spd = (map['speed'] ?? '').toString();
-          orderMeta[code] = {
-            'orderId': code,
-            'serviceName': spd.isNotEmpty ? '$svc - $spd' : svc,
-            'status': (map['status'] ?? 'Diproses').toString(),
-          };
-        }
-      }
-
-      final msgRes = await _supabase
-          .from('messages')
+      // 1. Ambil semua pesanan milik customer ini
+      final ordersRes = await _supabase
+          .from('orders')
           .select()
-          .order('created_at', ascending: false);
+          .order('order_code', ascending: false);
 
-      final groupedMessages = {};
-      for (final row in (msgRes as List)) {
-        final map = Map<String, dynamic>.from(row as Map);
+      final myOrders = [];
+      final myCodes = [];
+
+      for (final row in ordersRes) {
+        final map = Map.from(row as Map);
+        final rowUid = (map['user_id'] ?? '').toString().trim();
+        final rowCust = (map['customer_name'] ?? '').toString().trim().toLowerCase();
+
+        final isMine = (uid.isNotEmpty && rowUid == uid) ||
+            (userName.isNotEmpty &&
+                userName != 'customer' &&
+                rowCust == userName);
+
+        if (!isMine) continue;
+
         final code = (map['order_code'] ?? '').toString().trim();
         if (code.isEmpty) continue;
-        if (orderMeta.isNotEmpty && !orderMeta.containsKey(code)) {
-          continue;
-        }
-        if (!groupedMessages.containsKey(code)) {
-          groupedMessages[code] = [];
-        }
-        (groupedMessages[code] as List).add(map);
+
+        final svc = (map['service_name'] ?? 'Laundry').toString();
+        final spd = (map['speed'] ?? '').toString();
+        final status = (map['status'] ?? 'Diproses').toString();
+
+        myCodes.add(code);
+        myOrders.add({
+          'orderId': code,
+          'serviceName': spd.isNotEmpty ? '$svc - $spd' : svc,
+          'status': status,
+        });
       }
 
-      final allCodes = <String>{
-        ...groupedMessages.keys.map((k) => k.toString()),
-        ...orderMeta.keys.map((k) => k.toString()),
-      };
+      // 2. Ambil riwayat pesan milik pesanan customer ini
+      String lastMsg = 'Ketuk untuk mulai chat dengan Admin Wish You Wash';
+      String lastTime = '';
+      String lastCode = myOrders.isNotEmpty
+          ? (myOrders.first as Map)['orderId'].toString()
+          : '';
+      bool adminLast = false;
+      int unreadCount = 0;
 
-      final threads = [];
-      for (final code in allCodes) {
-        final meta = orderMeta[code] is Map
-            ? Map<String, dynamic>.from(orderMeta[code] as Map)
-            : {
-          'orderId': code,
-          'serviceName': 'Layanan Laundry',
-          'status': 'Diproses',
-        };
+      if (myCodes.isNotEmpty) {
+        final msgRes = await _supabase
+            .from('messages')
+            .select()
+            .order('created_at', ascending: false);
 
-        final msgs =
-        groupedMessages[code] is List ? (groupedMessages[code] as List) : [];
+        bool foundLatest = false;
+        for (final row in msgRes) {
+          final m = Map.from(row as Map);
+          final code = (m['order_code'] ?? '').toString().trim();
+          if (!myCodes.contains(code)) continue;
 
-        final latest = msgs.isNotEmpty
-            ? Map<String, dynamic>.from(msgs.first as Map)
-            : null;
+          if (!foundLatest) {
+            foundLatest = true;
+            lastMsg = (m['message_text'] ?? '').toString();
+            lastTime = _formatTime(m['created_at']);
+            lastCode = code;
+            adminLast = m['sender_role']?.toString() == 'admin';
+          }
 
-        int unreadCount = 0;
-        for (final item in msgs) {
-          final m = Map<String, dynamic>.from(item as Map);
           if (m['sender_role']?.toString() == 'admin' &&
               m['is_read'] == false) {
             unreadCount++;
           }
         }
-
-        threads.add({
-          'orderId': code,
-          'serviceName': (meta['serviceName'] ?? 'Layanan Laundry').toString(),
-          'status': (meta['status'] ?? 'Diproses').toString(),
-          'lastMessage': latest != null
-              ? (latest['message_text'] ?? '').toString()
-              : 'Ketuk untuk mulai chat dengan admin',
-          'time': latest != null ? _formatTime(latest['created_at']) : '',
-          'unread': unreadCount,
-        });
       }
 
       if (!mounted) return;
       setState(() {
-        _chatThreads = threads;
+        _userOrders = myOrders;
+        _lastMessage = lastMsg;
+        _lastMessageTime = lastTime;
+        _lastOrderCode = lastCode;
+        _isAdminLast = adminLast;
+        _unreadAdminCount = unreadCount;
         _isLoading = false;
       });
     } catch (e) {
       if (!mounted) return;
       setState(() => _isLoading = false);
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          backgroundColor: Colors.redAccent,
-          content: Text(
-            'Gagal memuat percakapan: $e',
-            style: GoogleFonts.poppins(fontSize: 12),
-          ),
-        ),
+    }
+  }
+
+  Future _openUnifiedChatRoom([Map? selectedOrder]) async {
+    Map targetOrder = {};
+    if (selectedOrder != null) {
+      targetOrder = Map.from(selectedOrder);
+    } else if (_userOrders.isNotEmpty) {
+      final found = _userOrders.firstWhere(
+        (o) => (o as Map)['orderId'] == _lastOrderCode,
+        orElse: () => _userOrders.first,
       );
+      targetOrder = Map.from(found as Map);
+    }
+
+    await Navigator.pushNamed(
+      context,
+      '/chat-room',
+      arguments: {
+        'orderId': (targetOrder['orderId'] ?? '').toString(),
+        'serviceName': (targetOrder['serviceName'] ?? 'Layanan Laundry').toString(),
+        'status': (targetOrder['status'] ?? 'Diproses').toString(),
+        'allOrders': _userOrders,
+      },
+    );
+
+    if (mounted) {
+      _loadCustomerChatSummary();
     }
   }
 
   @override
   Widget build(BuildContext context) {
+    final quickOrders = _userOrders.take(4).toList();
+
     return Scaffold(
-      backgroundColor: _C.headerBlue,
-      appBar: AppBar(
-        backgroundColor: Colors.transparent,
-        elevation: 0,
-        centerTitle: true,
-        automaticallyImplyLeading: false,
-        title: Text(
-          'Pesan & Bantuan',
-          style: GoogleFonts.poppins(
-            fontSize: 18,
-            fontWeight: FontWeight.w700,
-            color: _C.navy,
-          ),
-        ),
-      ),
-      body: Container(
-        width: double.infinity,
-        margin: const EdgeInsets.only(top: 10),
-        padding: const EdgeInsets.fromLTRB(16, 20, 16, 0),
-        decoration: const BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.vertical(
-            top: Radius.circular(28),
-          ),
-        ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Padding(
-              padding: const EdgeInsets.symmetric(
-                horizontal: 4,
-                vertical: 4,
-              ),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+      backgroundColor: const Color(0xFFF8FAFC),
+      body: Column(
+        children: [
+          // Header
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.fromLTRB(20, 18, 20, 22),
+            decoration: const BoxDecoration(
+              color: _C.headerBlue,
+              borderRadius: BorderRadius.vertical(bottom: Radius.circular(24)),
+            ),
+            child: SafeArea(
+              bottom: false,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
-                    'Percakapan Pesanan',
+                    'Pesan & Bantuan',
                     style: GoogleFonts.poppins(
-                      fontSize: 15,
-                      fontWeight: FontWeight.w700,
+                      fontSize: 22,
+                      fontWeight: FontWeight.w800,
                       color: _C.navy,
                     ),
                   ),
-                  Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 8,
-                      vertical: 3,
-                    ),
-                    decoration: BoxDecoration(
-                      color: const Color(0xFFE0F2FE),
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                    child: Text(
-                      '${_chatThreads.length} Pesanan',
-                      style: GoogleFonts.poppins(
-                        fontSize: 11,
-                        fontWeight: FontWeight.w600,
-                        color: _C.primaryBlue,
-                      ),
+                  Text(
+                    'Hubungi admin & pilih pesanan yang ingin ditanyakan',
+                    style: GoogleFonts.poppins(
+                      fontSize: 11.5,
+                      color: const Color(0xFF2E637E),
                     ),
                   ),
                 ],
               ),
             ),
-            const SizedBox(height: 12),
-            Expanded(
-              child: _isLoading
-                  ? const Center(
-                child: CircularProgressIndicator(color: _C.primaryBlue),
-              )
-                  : RefreshIndicator(
-                onRefresh: _loadChatThreads,
-                color: _C.primaryBlue,
-                child: _chatThreads.isEmpty
-                    ? ListView(
-                  physics: const AlwaysScrollableScrollPhysics(),
-                  children: [
-                    SizedBox(
-                      height:
-                      MediaQuery.of(context).size.height * 0.4,
-                      child: Center(
-                        child: Text(
-                          'Belum ada percakapan pesanan',
+          ),
+
+          // Konten Utama
+          Expanded(
+            child: _isLoading
+                ? const Center(
+                    child: CircularProgressIndicator(color: _C.teal),
+                  )
+                : RefreshIndicator(
+                    onRefresh: _loadCustomerChatSummary,
+                    color: _C.teal,
+                    child: ListView(
+                      padding: const EdgeInsets.all(16),
+                      physics: const BouncingScrollPhysics(
+                        parent: AlwaysScrollableScrollPhysics(),
+                      ),
+                      children: [
+                        // 1. SATU KARTU UTAMA: CHAT ADMIN WISH YOU WASH
+                        Text(
+                          'Ruang Obrolan',
                           style: GoogleFonts.poppins(
-                            fontSize: 12.5,
-                            color: _C.textSub,
+                            fontSize: 13,
+                            fontWeight: FontWeight.w700,
+                            color: _C.navy,
                           ),
                         ),
-                      ),
-                    ),
-                  ],
-                )
-                    : ListView.separated(
-                  physics: const BouncingScrollPhysics(
-                    parent: AlwaysScrollableScrollPhysics(),
-                  ),
-                  itemCount: _chatThreads.length,
-                  separatorBuilder: (context, index) =>
-                  const Divider(
-                    height: 16,
-                    color: Color(0xFFF1F5F9),
-                    thickness: 1,
-                  ),
-                  itemBuilder: (context, index) {
-                    final thread = Map<String, dynamic>.from(
-                      _chatThreads[index] as Map,
-                    );
-                    final int unreadCount =
-                        (thread['unread'] as int?) ?? 0;
-                    final String orderId =
-                    (thread['orderId'] ?? '').toString();
-                    final String serviceName =
-                    (thread['serviceName'] ?? '').toString();
-                    final String lastMessage =
-                    (thread['lastMessage'] ?? '').toString();
-                    final String time =
-                    (thread['time'] ?? '').toString();
-
-                    return InkWell(
-                      borderRadius: BorderRadius.circular(16),
-                      onTap: () async {
-                        await Navigator.pushNamed(
-                          context,
-                          '/chat-room',
-                          arguments: thread,
-                        );
-                        if (mounted) {
-                          _loadChatThreads();
-                        }
-                      },
-                      child: Padding(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 6,
-                          vertical: 8,
-                        ),
-                        child: Row(
-                          children: [
-                            // Avatar Icon Laundry
-                            Stack(
-                              clipBehavior: Clip.none,
-                              children: [
-                                Container(
-                                  width: 48,
-                                  height: 48,
-                                  decoration: BoxDecoration(
-                                    color: const Color(0xFFE0F2FE),
-                                    borderRadius:
-                                    BorderRadius.circular(16),
-                                  ),
-                                  child: const Icon(
-                                    Icons
-                                        .local_laundry_service_rounded,
-                                    color: Color(0xFF0284C7),
-                                    size: 26,
-                                  ),
+                        const SizedBox(height: 10),
+                        InkWell(
+                          onTap: () => _openUnifiedChatRoom(),
+                          borderRadius: BorderRadius.circular(18),
+                          child: Container(
+                            padding: const EdgeInsets.all(16),
+                            decoration: BoxDecoration(
+                              color: Colors.white,
+                              borderRadius: BorderRadius.circular(18),
+                              border: Border.all(
+                                color: _unreadAdminCount > 0
+                                    ? const Color(0xFF7DD3FC)
+                                    : const Color(0xFFE2E8F0),
+                                width: _unreadAdminCount > 0 ? 1.5 : 1,
+                              ),
+                              boxShadow: [
+                                BoxShadow(
+                                  color: Colors.black.withValues(alpha: 0.04),
+                                  blurRadius: 8,
+                                  offset: const Offset(0, 3),
                                 ),
-                                if (unreadCount > 0)
-                                  Positioned(
-                                    top: -2,
-                                    right: -2,
-                                    child: Container(
-                                      width: 12,
-                                      height: 12,
-                                      decoration: BoxDecoration(
-                                        color:
-                                        const Color(0xFFEF4444),
+                              ],
+                            ),
+                            child: Row(
+                              children: [
+                                Stack(
+                                  children: [
+                                    Container(
+                                      width: 52,
+                                      height: 52,
+                                      decoration: const BoxDecoration(
+                                        color: _C.headerBlue,
                                         shape: BoxShape.circle,
-                                        border: Border.all(
-                                          color: Colors.white,
-                                          width: 2,
+                                      ),
+                                      child: const Icon(
+                                        Icons.support_agent_rounded,
+                                        color: _C.navy,
+                                        size: 28,
+                                      ),
+                                    ),
+                                    Positioned(
+                                      right: 1,
+                                      bottom: 1,
+                                      child: Container(
+                                        width: 12,
+                                        height: 12,
+                                        decoration: BoxDecoration(
+                                          color: const Color(0xFF22C55E),
+                                          shape: BoxShape.circle,
+                                          border: Border.all(
+                                            color: Colors.white,
+                                            width: 2,
+                                          ),
                                         ),
                                       ),
                                     ),
+                                  ],
+                                ),
+                                const SizedBox(width: 14),
+                                Expanded(
+                                  child: Column(
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
+                                    children: [
+                                      Row(
+                                        children: [
+                                          Expanded(
+                                            child: Text(
+                                              'Admin Wish You Wash',
+                                              style: GoogleFonts.poppins(
+                                                fontSize: 14.5,
+                                                fontWeight: FontWeight.w700,
+                                                color: _C.navy,
+                                              ),
+                                            ),
+                                          ),
+                                          if (_lastMessageTime.isNotEmpty)
+                                            Text(
+                                              _lastMessageTime,
+                                              style: GoogleFonts.poppins(
+                                                fontSize: 10.5,
+                                                fontWeight:
+                                                    _unreadAdminCount > 0
+                                                        ? FontWeight.w600
+                                                        : FontWeight.w400,
+                                                color: _unreadAdminCount > 0
+                                                    ? _C.teal
+                                                    : const Color(0xFF94A3B8),
+                                              ),
+                                            ),
+                                        ],
+                                      ),
+                                      const SizedBox(height: 3),
+                                      if (_lastOrderCode.isNotEmpty)
+                                        Container(
+                                          margin:
+                                              const EdgeInsets.only(bottom: 4),
+                                          padding: const EdgeInsets.symmetric(
+                                            horizontal: 8,
+                                            vertical: 2,
+                                          ),
+                                          decoration: BoxDecoration(
+                                            color: _C.headerBlue,
+                                            borderRadius:
+                                                BorderRadius.circular(6),
+                                          ),
+                                          child: Text(
+                                            'Terakhir dibahas: $_lastOrderCode',
+                                            style: GoogleFonts.poppins(
+                                              fontSize: 9.5,
+                                              fontWeight: FontWeight.w600,
+                                              color: _C.navy,
+                                            ),
+                                          ),
+                                        ),
+                                      Row(
+                                        children: [
+                                          Expanded(
+                                            child: Text(
+                                              '${_isAdminLast ? 'Admin: ' : ''}$_lastMessage',
+                                              maxLines: 1,
+                                              overflow: TextOverflow.ellipsis,
+                                              style: GoogleFonts.poppins(
+                                                fontSize: 12,
+                                                fontWeight:
+                                                    _unreadAdminCount > 0
+                                                        ? FontWeight.w600
+                                                        : FontWeight.w400,
+                                                color: _unreadAdminCount > 0
+                                                    ? const Color(0xFF1E293B)
+                                                    : const Color(0xFF64748B),
+                                              ),
+                                            ),
+                                          ),
+                                          if (_unreadAdminCount > 0) ...[
+                                            const SizedBox(width: 8),
+                                            Container(
+                                              padding:
+                                                  const EdgeInsets.symmetric(
+                                                horizontal: 7,
+                                                vertical: 2,
+                                              ),
+                                              decoration: const BoxDecoration(
+                                                color: _C.teal,
+                                                shape: BoxShape.circle,
+                                              ),
+                                              child: Text(
+                                                _unreadAdminCount.toString(),
+                                                style: GoogleFonts.poppins(
+                                                  fontSize: 10,
+                                                  fontWeight: FontWeight.w700,
+                                                  color: Colors.white,
+                                                ),
+                                              ),
+                                            ),
+                                          ],
+                                        ],
+                                      ),
+                                    ],
                                   ),
+                                ),
                               ],
                             ),
-                            const SizedBox(width: 12),
+                          ),
+                        ),
 
-                            // Rincian Chat
-                            Expanded(
-                              child: Column(
-                                crossAxisAlignment:
-                                CrossAxisAlignment.start,
-                                children: [
-                                  Row(
-                                    mainAxisAlignment:
-                                    MainAxisAlignment
-                                        .spaceBetween,
+                        // 2. PINTASAN CEPAT: TANYAKAN PESANAN TERTENTU
+                        if (quickOrders.isNotEmpty) ...[
+                          const SizedBox(height: 22),
+                          Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                            children: [
+                              Text(
+                                'Tanyakan Pesanan Tertentu',
+                                style: GoogleFonts.poppins(
+                                  fontSize: 13,
+                                  fontWeight: FontWeight.w700,
+                                  color: _C.navy,
+                                ),
+                              ),
+                              Text(
+                                '${_userOrders.length} Total Pesanan',
+                                style: GoogleFonts.poppins(
+                                  fontSize: 10.5,
+                                  fontWeight: FontWeight.w600,
+                                  color: _C.teal,
+                                ),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 4),
+                          Text(
+                            'Pilih pesanan di bawah untuk langsung menanyakannya ke admin:',
+                            style: GoogleFonts.poppins(
+                              fontSize: 11,
+                              color: const Color(0xFF64748B),
+                            ),
+                          ),
+                          const SizedBox(height: 10),
+                          ...quickOrders.map((rawOrder) {
+                            final order = Map.from(rawOrder as Map);
+                            return Padding(
+                              padding: const EdgeInsets.only(bottom: 8),
+                              child: InkWell(
+                                onTap: () => _openUnifiedChatRoom(order),
+                                borderRadius: BorderRadius.circular(14),
+                                child: Container(
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 14,
+                                    vertical: 11,
+                                  ),
+                                  decoration: BoxDecoration(
+                                    color: Colors.white,
+                                    borderRadius: BorderRadius.circular(14),
+                                    border: Border.all(
+                                      color: const Color(0xFFE2E8F0),
+                                    ),
+                                  ),
+                                  child: Row(
                                     children: [
-                                      Text(
-                                        orderId,
-                                        style: GoogleFonts.poppins(
-                                          fontSize: 13.5,
-                                          fontWeight:
-                                          FontWeight.w700,
+                                      Container(
+                                        padding: const EdgeInsets.all(7),
+                                        decoration: BoxDecoration(
+                                          color: _C.headerBlue,
+                                          borderRadius:
+                                              BorderRadius.circular(9),
+                                        ),
+                                        child: const Icon(
+                                          Icons.local_laundry_service_rounded,
                                           color: _C.navy,
+                                          size: 18,
                                         ),
                                       ),
-                                      Text(
-                                        time,
-                                        style: GoogleFonts.poppins(
-                                          fontSize: 10.5,
-                                          color: _C.textSub,
+                                      const SizedBox(width: 10),
+                                      Expanded(
+                                        child: Column(
+                                          crossAxisAlignment:
+                                              CrossAxisAlignment.start,
+                                          children: [
+                                            Text(
+                                              order['orderId'].toString(),
+                                              style: GoogleFonts.poppins(
+                                                fontSize: 12,
+                                                fontWeight: FontWeight.w700,
+                                                color: _C.navy,
+                                              ),
+                                            ),
+                                            Text(
+                                              order['serviceName'].toString(),
+                                              maxLines: 1,
+                                              overflow: TextOverflow.ellipsis,
+                                              style: GoogleFonts.poppins(
+                                                fontSize: 10.5,
+                                                color: const Color(0xFF64748B),
+                                              ),
+                                            ),
+                                          ],
+                                        ),
+                                      ),
+                                      Container(
+                                        padding: const EdgeInsets.symmetric(
+                                          horizontal: 10,
+                                          vertical: 5,
+                                        ),
+                                        decoration: BoxDecoration(
+                                          color: const Color(0xFFE0F2FE),
+                                          borderRadius:
+                                              BorderRadius.circular(10),
+                                        ),
+                                        child: Text(
+                                          'Tanya Admin',
+                                          style: GoogleFonts.poppins(
+                                            fontSize: 10.5,
+                                            fontWeight: FontWeight.w600,
+                                            color: _C.navy,
+                                          ),
                                         ),
                                       ),
                                     ],
                                   ),
-                                  const SizedBox(height: 2),
-                                  Text(
-                                    serviceName,
-                                    style: GoogleFonts.poppins(
-                                      fontSize: 11,
-                                      fontWeight: FontWeight.w600,
-                                      color: _C.primaryBlue,
-                                    ),
-                                  ),
-                                  const SizedBox(height: 2),
-                                  Text(
-                                    lastMessage,
-                                    maxLines: 1,
-                                    overflow: TextOverflow.ellipsis,
-                                    style: GoogleFonts.poppins(
-                                      fontSize: 11.5,
-                                      color: unreadCount > 0
-                                          ? const Color(0xFF1E293B)
-                                          : _C.textSub,
-                                      fontWeight: unreadCount > 0
-                                          ? FontWeight.w600
-                                          : FontWeight.w400,
-                                    ),
-                                  ),
-                                ],
+                                ),
                               ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    );
-                  },
-                ),
-              ),
-            ),
-          ],
-        ),
+                            );
+                          }),
+                        ],
+                      ],
+                    ),
+                  ),
+          ),
+        ],
       ),
       bottomNavigationBar: const AppBottomNav(currentIndex: 1),
     );
