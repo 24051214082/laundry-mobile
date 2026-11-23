@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
@@ -19,6 +20,7 @@ class AdminChatListPage extends StatefulWidget {
 class _AdminChatListPageState extends State {
   final _supabase = Supabase.instance.client;
   final TextEditingController _searchController = TextEditingController();
+  Timer? _refreshTimer;
   String _searchQuery = '';
   var _chatList = [];
   bool _isLoading = true;
@@ -26,7 +28,17 @@ class _AdminChatListPageState extends State {
   @override
   void initState() {
     super.initState();
-    _loadAdminChats();
+    _loadAdminChats(showLoader: true);
+    _refreshTimer = Timer.periodic(const Duration(seconds: 3), (_) {
+      if (mounted) _loadAdminChats(showLoader: false);
+    });
+  }
+
+  @override
+  void dispose() {
+    _refreshTimer?.cancel();
+    _searchController.dispose();
+    super.dispose();
   }
 
   String _formatTime(dynamic rawCreatedAt) {
@@ -57,10 +69,9 @@ class _AdminChatListPageState extends State {
     return '${parts.first[0]}${parts[1][0]}'.toUpperCase();
   }
 
-  Future _loadAdminChats() async {
-    setState(() => _isLoading = true);
+  Future _loadAdminChats({bool showLoader = false}) async {
+    if (showLoader && mounted) setState(() => _isLoading = true);
     try {
-      // 1. Peta nama user berdasarkan user_id dari tabel users
       final userNameById = {};
       try {
         final usersRes = await _supabase
@@ -85,7 +96,6 @@ class _AdminChatListPageState extends State {
         }
       } catch (_) {}
 
-      // 2. Info pesanan berdasarkan order_code dari tabel orders
       final orderInfoByCode = {};
       try {
         final ordersRes = await _supabase.from('orders').select(
@@ -113,13 +123,11 @@ class _AdminChatListPageState extends State {
         }
       } catch (_) {}
 
-      // 3. Ambil seluruh pesan, urutkan dari terbaru
       final msgRes = await _supabase
           .from('messages')
           .select()
           .order('created_at', ascending: false);
 
-      // 4. Kelompokkan 1 Customer = 1 Room Chat
       final customerGroups = {};
 
       for (final row in msgRes) {
@@ -195,25 +203,10 @@ class _AdminChatListPageState extends State {
         _chatList = customerGroups.values.toList();
         _isLoading = false;
       });
-    } catch (e) {
+    } catch (_) {
       if (!mounted) return;
-      setState(() => _isLoading = false);
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          backgroundColor: Colors.redAccent,
-          content: Text(
-            'Gagal memuat pesan pelanggan: $e',
-            style: GoogleFonts.poppins(fontSize: 12),
-          ),
-        ),
-      );
+      if (showLoader) setState(() => _isLoading = false);
     }
-  }
-
-  @override
-  void dispose() {
-    _searchController.dispose();
-    super.dispose();
   }
 
   @override
@@ -230,7 +223,6 @@ class _AdminChatListPageState extends State {
       backgroundColor: const Color(0xFFF8FAFC),
       body: Column(
         children: [
-          // Header & Search Bar
           Container(
             padding: const EdgeInsets.fromLTRB(20, 16, 20, 20),
             decoration: const BoxDecoration(
@@ -325,15 +317,13 @@ class _AdminChatListPageState extends State {
               ),
             ),
           ),
-
-          // Daftar Kartu Percakapan per Customer
           Expanded(
             child: _isLoading
                 ? const Center(
                     child: CircularProgressIndicator(color: _C.teal),
                   )
                 : RefreshIndicator(
-                    onRefresh: _loadAdminChats,
+                    onRefresh: () => _loadAdminChats(showLoader: false),
                     color: _C.teal,
                     child: filteredChats.isEmpty
                         ? ListView(
@@ -391,7 +381,7 @@ class _AdminChatListPageState extends State {
                                     },
                                   );
                                   if (mounted) {
-                                    _loadAdminChats();
+                                    _loadAdminChats(showLoader: false);
                                   }
                                 },
                                 borderRadius: BorderRadius.circular(18),

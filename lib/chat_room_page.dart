@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
@@ -23,9 +24,12 @@ class _ChatRoomPageState extends State {
   final TextEditingController _msgController = TextEditingController();
   final ScrollController _scrollController = ScrollController();
 
+  Timer? _pollTimer;
   bool _initializedArgs = false;
+  bool _isLoadingMessages = true;
   bool _isSending = false;
   bool _isMarkingRead = false;
+  bool _isFetching = false;
 
   String _activeOrderId = '';
   String _activeServiceName = 'Layanan Laundry';
@@ -34,6 +38,7 @@ class _ChatRoomPageState extends State {
 
   var _allOrders = [];
   final _orderMetaByCode = {};
+  var _messages = [];
 
   final List _quickQuestions = [
     'Halo Admin, bagaimana status pesanan ini?',
@@ -82,66 +87,140 @@ class _ChatRoomPageState extends State {
     }
 
     _bootstrapCustomerData();
+    _pollTimer = Timer.periodic(const Duration(milliseconds: 1500), (_) {
+      if (mounted) _fetchMessages(initialLoad: false);
+    });
+  }
+
+  @override
+  void dispose() {
+    _pollTimer?.cancel();
+    _msgController.dispose();
+    _scrollController.dispose();
+    super.dispose();
+  }
+
+  Future _syncCustomerOrders() async {
+    try {
+      final uid = (UserSession.userId ?? '').trim();
+      final userName = _resolvedCustomerName.trim().toLowerCase();
+
+      final ordersRes = await _supabase
+          .from('orders')
+          .select()
+          .order('order_code', ascending: false);
+
+      final loaded = [];
+      for (final row in ordersRes) {
+        final map = Map.from(row as Map);
+        final rowUid = (map['user_id'] ?? '').toString().trim();
+        final rowCust =
+            (map['customer_name'] ?? '').toString().trim().toLowerCase();
+
+        final isMine = (uid.isNotEmpty && rowUid == uid) ||
+            (userName.isNotEmpty &&
+                userName != 'customer' &&
+                userName != 'pelanggan' &&
+                rowCust == userName);
+
+        if (!isMine) continue;
+
+        final code = (map['order_code'] ?? '').toString().trim();
+        if (code.isEmpty) continue;
+
+        final svc = (map['service_name'] ?? 'Laundry').toString();
+        final spd = (map['speed'] ?? '').toString();
+        final meta = {
+          'orderId': code,
+          'serviceName': spd.isNotEmpty ? '$svc - $spd' : svc,
+          'status': (map['status'] ?? 'Diproses').toString(),
+        };
+        loaded.add(meta);
+        _orderMetaByCode[code] = meta;
+      }
+
+      if (mounted && loaded.isNotEmpty) {
+        _allOrders = loaded;
+        if (_activeOrderId.isEmpty) {
+          final first = Map.from(loaded.first as Map);
+          _activeOrderId = first['orderId'].toString();
+          _activeServiceName = first['serviceName'].toString();
+          _activeStatus = first['status'].toString();
+        }
+      }
+    } catch (_) {}
   }
 
   Future _bootstrapCustomerData() async {
     await _resolveCustomerName();
-
-    // Jika masuk langsung dari Detail/Status Pesanan (belum bawa allOrders), muat semua pesanan customer
-    if (_allOrders.isEmpty) {
-      try {
-        final uid = (UserSession.userId ?? '').trim();
-        final userName = _resolvedCustomerName.trim().toLowerCase();
-
-        final ordersRes = await _supabase
-            .from('orders')
-            .select()
-            .order('order_code', ascending: false);
-
-        final loaded = [];
-        for (final row in ordersRes) {
-          final map = Map.from(row as Map);
-          final rowUid = (map['user_id'] ?? '').toString().trim();
-          final rowCust =
-              (map['customer_name'] ?? '').toString().trim().toLowerCase();
-
-          final isMine = (uid.isNotEmpty && rowUid == uid) ||
-              (userName.isNotEmpty &&
-                  userName != 'customer' &&
-                  userName != 'pelanggan' &&
-                  rowCust == userName);
-
-          if (!isMine) continue;
-
-          final code = (map['order_code'] ?? '').toString().trim();
-          if (code.isEmpty) continue;
-
-          final svc = (map['service_name'] ?? 'Laundry').toString();
-          final spd = (map['speed'] ?? '').toString();
-          final meta = {
-            'orderId': code,
-            'serviceName': spd.isNotEmpty ? '$svc - $spd' : svc,
-            'status': (map['status'] ?? 'Diproses').toString(),
-          };
-          loaded.add(meta);
-          _orderMetaByCode[code] = meta;
-        }
-
-        if (mounted && loaded.isNotEmpty) {
-          setState(() {
-            _allOrders = loaded;
-            if (_activeOrderId.isEmpty) {
-              final first = Map.from(loaded.first as Map);
-              _activeOrderId = first['orderId'].toString();
-              _activeServiceName = first['serviceName'].toString();
-              _activeStatus = first['status'].toString();
-            }
-          });
-        }
-      } catch (_) {}
-    }
-
+    await _syncCustomerOrders();
+    await _fetchMessages(initialLoad: true);
     _markAdminMessagesAsRead();
+  }
+
+  Future _fetchMessages({bool initialLoad = false}) async {
+    if (_isFetching) return;
+    _isFetching = true;
+    try {
+      if (_orderMetaByCode.isEmpty) {
+        await _syncCustomerOrders();
+      }
+
+      final rawList = await _supabase
+          .from('messages')
+          .select()
+          .order('created_at', ascending: true);
+
+      final seenIds = {};
+      final filtered = [];
+
+      for (final e in rawList) {
+        final map = Map.from(e as Map);
+        final code = (map['order_code'] ?? '').toString().trim();
+        if (code.isEmpty) continue;
+
+        final isKnownOrder = _orderMetaByCode.containsKey(code);
+        final isSameSender = _resolvedCustomerName.isNotEmpty &&
+            (map['sender_name'] ?? '').toString().trim().toLowerCase() ==
+                _resolvedCustomerName.trim().toLowerCase();
+
+        if (!isKnownOrder && !isSameSender) continue;
+
+        final idStr = map['id']?.toString() ?? '';
+        if (idStr.isNotEmpty) {
+          if (seenIds.containsKey(idStr)) continue;
+          seenIds[idStr] = true;
+        }
+        filtered.add(map);
+      }
+
+      if (!mounted) return;
+      final bool hasNewMessage = filtered.length > _messages.length;
+
+      setState(() {
+        _messages = filtered;
+        if (initialLoad) _isLoadingMessages = false;
+      });
+
+      if (hasNewMessage || initialLoad) {
+        _scrollToBottom();
+      }
+
+      final hasUnreadAdmin = filtered.any(
+        (m) =>
+            (m as Map)['sender_role']?.toString() == 'admin' &&
+            m['is_read'] == false,
+      );
+      if (hasUnreadAdmin && !_isMarkingRead) {
+        _markAdminMessagesAsRead();
+      }
+    } catch (_) {
+      if (mounted && initialLoad) {
+        setState(() => _isLoadingMessages = false);
+      }
+    } finally {
+      _isFetching = false;
+    }
   }
 
   Future _resolveCustomerName() async {
@@ -208,6 +287,82 @@ class _ChatRoomPageState extends State {
           (orderMap['serviceName'] ?? _activeServiceName).toString();
       _activeStatus = (orderMap['status'] ?? _activeStatus).toString();
     });
+  }
+
+  Future _confirmAndDeleteMessage(Map msg) async {
+    final msgId = msg['id'];
+    if (msgId == null) return;
+
+    final bool? confirmed = await showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
+        title: Text(
+          'Hapus Pesan Ini?',
+          style: GoogleFonts.poppins(
+            fontSize: 15,
+            fontWeight: FontWeight.w700,
+            color: _C.navy,
+          ),
+        ),
+        content: Text(
+          'Pesan akan dihapus permanen di layar Anda dan Admin (2 arah).',
+          style: GoogleFonts.poppins(
+            fontSize: 12.5,
+            color: const Color(0xFF475569),
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: Text(
+              'Batal',
+              style: GoogleFonts.poppins(
+                fontSize: 12,
+                color: const Color(0xFF64748B),
+              ),
+            ),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.redAccent,
+              foregroundColor: Colors.white,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(10),
+              ),
+            ),
+            onPressed: () => Navigator.pop(ctx, true),
+            child: Text(
+              'Hapus Pesan',
+              style: GoogleFonts.poppins(
+                fontSize: 12,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed != true) return;
+
+    try {
+      await _supabase.from('messages').delete().eq('id', msgId);
+      setState(() {
+        _messages.removeWhere((m) => (m as Map)['id'] == msgId);
+      });
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          backgroundColor: Colors.redAccent,
+          content: Text(
+            'Gagal menghapus pesan: $e',
+            style: GoogleFonts.poppins(fontSize: 12),
+          ),
+        ),
+      );
+    }
   }
 
   void _showOrderPickerSheet() {
@@ -369,6 +524,7 @@ class _ChatRoomPageState extends State {
         'is_read': false,
       });
 
+      await _fetchMessages(initialLoad: false);
       _scrollToBottom();
     } catch (e) {
       if (!mounted) return;
@@ -395,7 +551,7 @@ class _ChatRoomPageState extends State {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (_scrollController.hasClients) {
         _scrollController.animateTo(
-          _scrollController.position.maxScrollExtent + 120,
+          0.0,
           duration: const Duration(milliseconds: 220),
           curve: Curves.easeOut,
         );
@@ -414,18 +570,8 @@ class _ChatRoomPageState extends State {
   }
 
   @override
-  void dispose() {
-    _msgController.dispose();
-    _scrollController.dispose();
-    super.dispose();
-  }
-
-  @override
   Widget build(BuildContext context) {
-    final messageStream = _supabase
-        .from('messages')
-        .stream(primaryKey: ['id'])
-        .order('created_at', ascending: true);
+    final reversedMessages = _messages.reversed.toList();
 
     return Scaffold(
       backgroundColor: const Color(0xFFF8FAFC),
@@ -483,7 +629,6 @@ class _ChatRoomPageState extends State {
       ),
       body: Column(
         children: [
-          // Banner Konteks Pesanan yang Sedang Ditanyakan
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
             decoration: BoxDecoration(
@@ -598,189 +743,203 @@ class _ChatRoomPageState extends State {
             ),
           ),
 
-          // Daftar Pesan Terpadu Customer
+          // Daftar Pesan (reverse: true -> pesan terbaru selalu otomatis di paling bawah)
           Expanded(
-            child: StreamBuilder(
-              stream: messageStream,
-              builder: (context, snapshot) {
-                if (snapshot.hasError) {
-                  return Center(
-                    child: Padding(
-                      padding: const EdgeInsets.all(20),
-                      child: Text(
-                        'Gagal memuat pesan: ${snapshot.error}',
-                        textAlign: TextAlign.center,
-                        style: GoogleFonts.poppins(
-                          fontSize: 12,
-                          color: Colors.redAccent,
-                        ),
-                      ),
-                    ),
-                  );
-                }
-
-                if (!snapshot.hasData) {
-                  return const Center(
+            child: _isLoadingMessages
+                ? const Center(
                     child: CircularProgressIndicator(color: _C.teal),
-                  );
-                }
-
-                final rawList = (snapshot.data as List);
-                final seenIds = {};
-                final messages = [];
-
-                for (final e in rawList) {
-                  final map = Map.from(e as Map);
-                  final code = (map['order_code'] ?? '').toString().trim();
-                  if (!_orderMetaByCode.containsKey(code)) continue;
-
-                  final idStr = map['id']?.toString() ?? '';
-                  if (idStr.isNotEmpty) {
-                    if (seenIds.containsKey(idStr)) continue;
-                    seenIds[idStr] = true;
-                  }
-                  messages.add(map);
-                }
-
-                final hasUnreadAdmin = messages.any(
-                  (m) =>
-                      (m as Map)['sender_role']?.toString() == 'admin' &&
-                      m['is_read'] == false,
-                );
-                if (hasUnreadAdmin && !_isMarkingRead) {
-                  WidgetsBinding.instance.addPostFrameCallback((_) {
-                    _markAdminMessagesAsRead();
-                  });
-                }
-
-                if (messages.isEmpty) {
-                  return Center(
-                    child: Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 24),
-                      child: Text(
-                        'Belum ada percakapan.\nPilih pesanan di atas lalu kirim pertanyaan ke Admin.',
-                        textAlign: TextAlign.center,
-                        style: GoogleFonts.poppins(
-                          fontSize: 12,
-                          color: const Color(0xFF64748B),
-                        ),
-                      ),
-                    ),
-                  );
-                }
-
-                return ListView.builder(
-                  controller: _scrollController,
-                  padding: const EdgeInsets.all(16),
-                  physics: const BouncingScrollPhysics(),
-                  itemCount: messages.length,
-                  itemBuilder: (context, index) {
-                    final msg = Map.from(messages[index] as Map);
-                    final bool isUser =
-                        msg['sender_role']?.toString() == 'customer';
-                    final String textContent =
-                        (msg['message_text'] ?? '').toString();
-                    final String timeContent = _formatTime(msg['created_at']);
-                    final String msgOrderCode =
-                        (msg['order_code'] ?? '').toString().trim();
-                    final meta = _orderMetaByCode[msgOrderCode] is Map
-                        ? Map.from(_orderMetaByCode[msgOrderCode] as Map)
-                        : {};
-                    final String msgService =
-                        (meta['serviceName'] ?? '').toString();
-
-                    return Align(
-                      alignment:
-                          isUser ? Alignment.centerRight : Alignment.centerLeft,
-                      child: GestureDetector(
-                        onTap: () {
-                          if (meta.isNotEmpty) _selectOrderContext(meta);
-                        },
-                        child: Container(
-                          margin: const EdgeInsets.only(bottom: 12),
-                          constraints: BoxConstraints(
-                            maxWidth: MediaQuery.of(context).size.width * 0.78,
-                          ),
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 14,
-                            vertical: 10,
-                          ),
-                          decoration: BoxDecoration(
-                            color: isUser ? _C.bubbleUser : _C.bubbleAdmin,
-                            borderRadius: BorderRadius.only(
-                              topLeft: const Radius.circular(16),
-                              topRight: const Radius.circular(16),
-                              bottomLeft: Radius.circular(isUser ? 16 : 4),
-                              bottomRight: Radius.circular(isUser ? 4 : 16),
+                  )
+                : reversedMessages.isEmpty
+                    ? Center(
+                        child: Padding(
+                          padding: const EdgeInsets.symmetric(horizontal: 24),
+                          child: Text(
+                            'Belum ada percakapan.\nPilih pesanan di atas lalu kirim pertanyaan ke Admin.',
+                            textAlign: TextAlign.center,
+                            style: GoogleFonts.poppins(
+                              fontSize: 12,
+                              color: const Color(0xFF64748B),
                             ),
-                            boxShadow: [
-                              BoxShadow(
-                                color: Colors.black.withValues(alpha: 0.03),
-                                blurRadius: 4,
-                                offset: const Offset(0, 2),
-                              ),
-                            ],
-                          ),
-                          child: Column(
-                            crossAxisAlignment: isUser
-                                ? CrossAxisAlignment.end
-                                : CrossAxisAlignment.start,
-                            children: [
-                              if (msgOrderCode.isNotEmpty)
-                                Container(
-                                  margin: const EdgeInsets.only(bottom: 6),
-                                  padding: const EdgeInsets.symmetric(
-                                    horizontal: 8,
-                                    vertical: 3,
-                                  ),
-                                  decoration: BoxDecoration(
-                                    color: isUser
-                                        ? Colors.white.withValues(alpha: 0.18)
-                                        : _C.headerBlue,
-                                    borderRadius: BorderRadius.circular(8),
-                                  ),
-                                  child: Text(
-                                    msgService.isNotEmpty
-                                        ? '$msgOrderCode • $msgService'
-                                        : msgOrderCode,
-                                    style: GoogleFonts.poppins(
-                                      fontSize: 9.5,
-                                      fontWeight: FontWeight.w600,
-                                      color: isUser ? Colors.white : _C.navy,
-                                    ),
-                                  ),
-                                ),
-                              Text(
-                                textContent,
-                                style: GoogleFonts.poppins(
-                                  fontSize: 12.5,
-                                  color: isUser
-                                      ? Colors.white
-                                      : const Color(0xFF1E293B),
-                                ),
-                              ),
-                              const SizedBox(height: 4),
-                              Text(
-                                timeContent,
-                                style: GoogleFonts.poppins(
-                                  fontSize: 9.5,
-                                  color: isUser
-                                      ? Colors.white70
-                                      : const Color(0xFF94A3B8),
-                                ),
-                              ),
-                            ],
                           ),
                         ),
+                      )
+                    : ListView.builder(
+                        controller: _scrollController,
+                        reverse: true,
+                        padding: const EdgeInsets.all(16),
+                        physics: const BouncingScrollPhysics(),
+                        itemCount: reversedMessages.length,
+                        itemBuilder: (context, index) {
+                          final msg = Map.from(reversedMessages[index] as Map);
+                          final bool isUser =
+                              msg['sender_role']?.toString() == 'customer';
+                          final String textContent =
+                              (msg['message_text'] ?? '').toString();
+                          final String timeContent =
+                              _formatTime(msg['created_at']);
+                          final String msgOrderCode =
+                              (msg['order_code'] ?? '').toString().trim();
+                          final meta = _orderMetaByCode[msgOrderCode] is Map
+                              ? Map.from(_orderMetaByCode[msgOrderCode] as Map)
+                              : {};
+                          final String msgService =
+                              (meta['serviceName'] ?? '').toString();
+
+                          return Align(
+                            alignment: isUser
+                                ? Alignment.centerRight
+                                : Alignment.centerLeft,
+                            child: GestureDetector(
+                              onTap: () {
+                                if (meta.isNotEmpty) _selectOrderContext(meta);
+                              },
+                              child: Container(
+                                margin: const EdgeInsets.only(bottom: 12),
+                                constraints: BoxConstraints(
+                                  maxWidth:
+                                      MediaQuery.of(context).size.width * 0.78,
+                                ),
+                                padding: const EdgeInsets.fromLTRB(
+                                    14, 10, 10, 10),
+                                decoration: BoxDecoration(
+                                  color: isUser
+                                      ? _C.bubbleUser
+                                      : _C.bubbleAdmin,
+                                  borderRadius: BorderRadius.only(
+                                    topLeft: const Radius.circular(16),
+                                    topRight: const Radius.circular(16),
+                                    bottomLeft:
+                                        Radius.circular(isUser ? 16 : 4),
+                                    bottomRight:
+                                        Radius.circular(isUser ? 4 : 16),
+                                  ),
+                                  boxShadow: [
+                                    BoxShadow(
+                                      color:
+                                          Colors.black.withValues(alpha: 0.03),
+                                      blurRadius: 4,
+                                      offset: const Offset(0, 2),
+                                    ),
+                                  ],
+                                ),
+                                child: Column(
+                                  crossAxisAlignment: isUser
+                                      ? CrossAxisAlignment.end
+                                      : CrossAxisAlignment.start,
+                                  children: [
+                                    Row(
+                                      mainAxisSize: MainAxisSize.min,
+                                      children: [
+                                        if (msgOrderCode.isNotEmpty)
+                                          Flexible(
+                                            child: Container(
+                                              padding:
+                                                  const EdgeInsets.symmetric(
+                                                horizontal: 8,
+                                                vertical: 3,
+                                              ),
+                                              decoration: BoxDecoration(
+                                                color: isUser
+                                                    ? Colors.white
+                                                        .withValues(alpha: 0.18)
+                                                    : _C.headerBlue,
+                                                borderRadius:
+                                                    BorderRadius.circular(8),
+                                              ),
+                                              child: Text(
+                                                msgService.isNotEmpty
+                                                    ? '$msgOrderCode • $msgService'
+                                                    : msgOrderCode,
+                                                maxLines: 1,
+                                                overflow: TextOverflow.ellipsis,
+                                                style: GoogleFonts.poppins(
+                                                  fontSize: 9.5,
+                                                  fontWeight: FontWeight.w600,
+                                                  color: isUser
+                                                      ? Colors.white
+                                                      : _C.navy,
+                                                ),
+                                              ),
+                                            ),
+                                          ),
+                                        if (isUser) ...[
+                                          const SizedBox(width: 4),
+                                          PopupMenuButton(
+                                            padding: EdgeInsets.zero,
+                                            constraints: const BoxConstraints(),
+                                            tooltip: 'Opsi pesan',
+                                            icon: const Icon(
+                                              Icons.keyboard_arrow_down_rounded,
+                                              size: 18,
+                                              color: Colors.white70,
+                                            ),
+                                            onSelected: (val) {
+                                              if (val == 'delete') {
+                                                _confirmAndDeleteMessage(msg);
+                                              }
+                                            },
+                                            itemBuilder: (ctx) => [
+                                              PopupMenuItem(
+                                                value: 'delete',
+                                                height: 36,
+                                                child: Row(
+                                                  mainAxisSize:
+                                                      MainAxisSize.min,
+                                                  children: [
+                                                    const Icon(
+                                                      Icons
+                                                          .delete_outline_rounded,
+                                                      size: 16,
+                                                      color: Colors.redAccent,
+                                                    ),
+                                                    const SizedBox(width: 8),
+                                                    Text(
+                                                      'Hapus 2 Arah',
+                                                      style:
+                                                          GoogleFonts.poppins(
+                                                        fontSize: 12,
+                                                        fontWeight:
+                                                            FontWeight.w500,
+                                                        color: Colors.redAccent,
+                                                      ),
+                                                    ),
+                                                  ],
+                                                ),
+                                              ),
+                                            ],
+                                          ),
+                                        ],
+                                      ],
+                                    ),
+                                    const SizedBox(height: 6),
+                                    Text(
+                                      textContent,
+                                      style: GoogleFonts.poppins(
+                                        fontSize: 12.5,
+                                        color: isUser
+                                            ? Colors.white
+                                            : const Color(0xFF1E293B),
+                                      ),
+                                    ),
+                                    const SizedBox(height: 4),
+                                    Text(
+                                      timeContent,
+                                      style: GoogleFonts.poppins(
+                                        fontSize: 9.5,
+                                        color: isUser
+                                            ? Colors.white70
+                                            : const Color(0xFF94A3B8),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ),
+                          );
+                        },
                       ),
-                    );
-                  },
-                );
-              },
-            ),
           ),
 
-          // Pertanyaan Cepat (Quick Questions)
           Container(
             height: 42,
             color: Colors.white,
@@ -817,8 +976,6 @@ class _ChatRoomPageState extends State {
               },
             ),
           ),
-
-          // Input Text Bar Bawah
           Container(
             padding: EdgeInsets.fromLTRB(
               16,
