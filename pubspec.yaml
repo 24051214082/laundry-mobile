@@ -21,6 +21,7 @@ dependencies:
   intl: ^0.19.0
   supabase_flutter: ^2.18.3
   shared_preferences: ^2.5.6
+  gal: ^3.0.1
 
 dev_dependencies:
   flutter_test:

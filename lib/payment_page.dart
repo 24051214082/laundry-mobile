@@ -1,6 +1,11 @@
+import 'dart:async';
+import 'dart:io';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:http/http.dart' as http;
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:gal/gal.dart';
 
 class PaymentPage extends StatefulWidget {
   final String orderId;
@@ -15,7 +20,7 @@ class PaymentPage extends StatefulWidget {
     this.serviceName = 'Laundry Kiloan (5.0 kg)',
     this.totalAmount = 'Rp 35.000',
     this.isPaid = false,
-    this.paymentDate = '22 Oktober 2026 - 17.35 WIB',
+    this.paymentDate = 'Hari ini',
   });
 
   @override
@@ -28,8 +33,14 @@ class _PaymentPageState extends State<PaymentPage> {
   String _orderId = '#LKN4wa123';
   String _serviceName = 'Laundry Kiloan (5.0 kg)';
   String _totalAmount = 'Rp 35.000';
+
   bool _isInitialized = false;
-  bool _isUpdating = false;
+  bool _isLoadingQr = false;
+  bool _isDownloadingQr = false;
+  bool _isCheckingStatus = false;
+  String? _qrImageUrl;
+  String? _qrError;
+  StreamSubscription<List>? _orderSub;
 
   @override
   void initState() {
@@ -54,7 +65,23 @@ class _PaymentPageState extends State<PaymentPage> {
         _paymentDate = (args['paymentDate'] ?? _paymentDate).toString();
       }
       _isInitialized = true;
+
+      if (!_isPaid) {
+        _listenOrderPaymentRealtime();
+        _generateMidtransQris();
+      }
     }
+  }
+
+  @override
+  void dispose() {
+    _orderSub?.cancel();
+    super.dispose();
+  }
+
+  int _parseAmountToInt(String formatted) {
+    final digits = formatted.replaceAll(RegExp(r'[^0-9]'), '');
+    return int.tryParse(digits) ?? 10000;
   }
 
   bool _looksLikeUuid(String value) {
@@ -63,132 +90,184 @@ class _PaymentPageState extends State<PaymentPage> {
     ).hasMatch(value.trim());
   }
 
-  Future<void> _updatePaymentInSupabase(BuildContext dialogContext) async {
-    if (_isUpdating) return;
-    setState(() => _isUpdating = true);
+  void _listenOrderPaymentRealtime() {
+    final client = Supabase.instance.client;
+    final trimmedId = _orderId.trim();
+    final filterCol = _looksLikeUuid(trimmedId) ? 'id' : 'order_code';
+
+    _orderSub = client
+        .from('orders')
+        .stream(primaryKey: ['id'])
+        .eq(filterCol, trimmedId)
+        .listen((rows) {
+      if (rows.isEmpty || !mounted) return;
+      final payStatus =
+          (rows.first['payment_status'] ?? '').toString().toLowerCase();
+      if (payStatus == 'lunas' && !_isPaid) {
+        setState(() {
+          _isPaid = true;
+          _paymentDate = 'Hari ini, Baru saja';
+        });
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            backgroundColor: const Color(0xFF16A34A),
+            content: Text(
+              'Pembayaran QRIS otomatis terkonfirmasi!',
+              style: GoogleFonts.poppins(fontSize: 12),
+            ),
+          ),
+        );
+      }
+    });
+  }
+
+  Future<void> _generateMidtransQris() async {
+    setState(() {
+      _isLoadingQr = true;
+      _qrError = null;
+    });
 
     try {
       final client = Supabase.instance.client;
-      final trimmedId = _orderId.trim();
+      final grossAmount = _parseAmountToInt(_totalAmount);
 
-      final updatePayload = <String, dynamic>{
-        'payment_method': 'QRIS',
-        'payment_status': 'Lunas',
-      };
+      final res = await client.functions.invoke(
+        'create-midtrans-qris',
+        body: {
+          'orderCode': _orderId.trim(),
+          'grossAmount': grossAmount,
+        },
+      );
 
-      if (_looksLikeUuid(trimmedId)) {
-        await client.from('orders').update(updatePayload).eq('id', trimmedId);
-      } else {
-        await client
-            .from('orders')
-            .update(updatePayload)
-            .eq('order_code', trimmedId);
-      }
+      final data = res.data;
+      final url = (data is Map) ? data['qr_url']?.toString() : null;
 
       if (!mounted) return;
-      if (Navigator.canPop(dialogContext)) {
-        Navigator.pop(dialogContext);
+      if (url != null && url.isNotEmpty) {
+        setState(() {
+          _qrImageUrl = url;
+          _isLoadingQr = false;
+        });
+      } else {
+        setState(() {
+          _qrError = 'QRIS tidak tersedia dari Midtrans. Coba muat ulang.';
+          _isLoadingQr = false;
+        });
+      }
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _qrError = 'Gagal memuat QRIS: $e';
+        _isLoadingQr = false;
+      });
+    }
+  }
+
+  // Salin URL gambar QRIS ke clipboard
+  Future<void> _copyQrLink() async {
+    if (_qrImageUrl == null || _qrImageUrl!.isEmpty) return;
+    await Clipboard.setData(ClipboardData(text: _qrImageUrl!));
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        backgroundColor: const Color(0xFF1B4E6C),
+        content: Text(
+          'Link QRIS berhasil disalin ke clipboard!',
+          style: GoogleFonts.poppins(fontSize: 12),
+        ),
+      ),
+    );
+  }
+
+  // Download gambar QRIS (.png) ke folder Download HP
+  // Download gambar QRIS (.png) langsung ke Galeri HP
+  Future<void> _downloadQrImage() async {
+    if (_qrImageUrl == null || _qrImageUrl!.isEmpty || _isDownloadingQr) return;
+    setState(() => _isDownloadingQr = true);
+
+    try {
+      final response = await http.get(Uri.parse(_qrImageUrl!));
+      if (response.statusCode != 200) {
+        throw Exception('HTTP ${response.statusCode}');
       }
 
-      setState(() {
-        _isUpdating = false;
-        _isPaid = true;
-        _paymentDate = 'Hari ini, Baru saja';
-      });
+      final safeCode = _orderId.replaceAll(RegExp(r'[^a-zA-Z0-9_-]'), '');
+      final fileName =
+          'QRIS_${safeCode}_${DateTime.now().millisecondsSinceEpoch}';
 
+      await Gal.putImageBytes(
+        response.bodyBytes,
+        name: fileName,
+      );
+
+      if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           backgroundColor: const Color(0xFF16A34A),
           content: Text(
-            'Pembayaran berhasil diverifikasi dan disimpan!',
+            'Gambar QRIS berhasil disimpan ke Galeri!',
             style: GoogleFonts.poppins(fontSize: 12),
           ),
         ),
       );
     } catch (e) {
       if (!mounted) return;
-      setState(() => _isUpdating = false);
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           backgroundColor: Colors.redAccent,
           content: Text(
-            'Gagal memperbarui status pembayaran: $e',
+            'Gagal menyimpan ke Galeri: $e',
             style: GoogleFonts.poppins(fontSize: 12),
           ),
         ),
       );
+    } finally {
+      if (mounted) {
+        setState(() => _isDownloadingQr = false);
+      }
     }
   }
 
-  void _confirmPayment() {
-    showDialog(
-      context: context,
-      barrierDismissible: !_isUpdating,
-      builder: (dialogContext) => StatefulBuilder(
-        builder: (context, setDialogState) {
-          return AlertDialog(
-            shape:
-            RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
-            title: Text(
-              'Konfirmasi Pembayaran',
-              style: GoogleFonts.poppins(
-                fontSize: 16,
-                fontWeight: FontWeight.w700,
-                color: const Color(0xFF1B4E6C),
-              ),
-            ),
-            content: Text(
-              'Apakah kamu sudah menyelesaikan pembayaran sebesar $_totalAmount melalui QRIS?',
-              style: GoogleFonts.poppins(
-                fontSize: 12.5,
-                color: const Color(0xFF475569),
-              ),
-            ),
-            actions: [
-              TextButton(
-                onPressed:
-                _isUpdating ? null : () => Navigator.pop(dialogContext),
-                child: Text(
-                  'Belum',
-                  style: GoogleFonts.poppins(color: Colors.grey.shade600),
-                ),
-              ),
-              ElevatedButton(
-                onPressed: _isUpdating
-                    ? null
-                    : () async {
-                  setDialogState(() {});
-                  await _updatePaymentInSupabase(dialogContext);
-                },
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: const Color(0xFF338CA8),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(10),
-                  ),
-                ),
-                child: _isUpdating
-                    ? const SizedBox(
-                  width: 16,
-                  height: 16,
-                  child: CircularProgressIndicator(
-                    strokeWidth: 2,
-                    color: Colors.white,
-                  ),
-                )
-                    : Text(
-                  'Ya, Sudah Bayar',
-                  style: GoogleFonts.poppins(
-                    fontSize: 12,
-                    fontWeight: FontWeight.w600,
-                    color: Colors.white,
-                  ),
-                ),
-              ),
-            ],
-          );
-        },
-      ),
-    );
+  Future<void> _checkPaymentStatusManually() async {
+    if (_isCheckingStatus) return;
+    setState(() => _isCheckingStatus = true);
+
+    try {
+      final client = Supabase.instance.client;
+      final trimmedId = _orderId.trim();
+      final query = client.from('orders').select('payment_status');
+      final row = _looksLikeUuid(trimmedId)
+          ? await query.eq('id', trimmedId).maybeSingle()
+          : await query.eq('order_code', trimmedId).maybeSingle();
+
+      if (!mounted) return;
+      final isNowPaid =
+          (row?['payment_status'] ?? '').toString().toLowerCase() == 'lunas';
+
+      setState(() {
+        _isCheckingStatus = false;
+        if (isNowPaid) {
+          _isPaid = true;
+          _paymentDate = 'Hari ini, Baru saja';
+        }
+      });
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          backgroundColor:
+              isNowPaid ? const Color(0xFF16A34A) : const Color(0xFFB45309),
+          content: Text(
+            isNowPaid
+                ? 'Pembayaran telah lunas terverifikasi!'
+                : 'Pembayaran belum masuk. Silakan selesaikan scan QRIS.',
+            style: GoogleFonts.poppins(fontSize: 12),
+          ),
+        ),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _isCheckingStatus = false);
+    }
   }
 
   @override
@@ -321,7 +400,6 @@ class _PaymentPageState extends State<PaymentPage> {
 
               const SizedBox(height: 20),
 
-              // ================= Tampilan Kondisional: Sudah Bayar vs Belum Bayar =================
               if (_isPaid) _buildPaidSection() else _buildUnpaidQrisSection(),
             ],
           ),
@@ -330,7 +408,6 @@ class _PaymentPageState extends State<PaymentPage> {
     );
   }
 
-  // ==================== TAMPILAN JIKA SUDAH DIBAYAR ====================
   Widget _buildPaidSection() {
     return Container(
       width: double.infinity,
@@ -389,7 +466,7 @@ class _PaymentPageState extends State<PaymentPage> {
           ),
           const SizedBox(height: 6),
           Text(
-            'Terima kasih! Tagihan pesananmu sebesar $_totalAmount telah lunas terverifikasi.',
+            'Terima kasih! Tagihan pesananmu sebesar $_totalAmount telah lunas terverifikasi otomatis.',
             textAlign: TextAlign.center,
             style: GoogleFonts.poppins(
               fontSize: 12,
@@ -407,7 +484,7 @@ class _PaymentPageState extends State<PaymentPage> {
             ),
             child: Column(
               children: [
-                _buildReceiptRow('Metode Pembayaran', 'QRIS Instant'),
+                _buildReceiptRow('Metode Pembayaran', 'QRIS Midtrans'),
                 const SizedBox(height: 8),
                 _buildReceiptRow('Status', 'Lunas'),
                 const SizedBox(height: 8),
@@ -465,8 +542,9 @@ class _PaymentPageState extends State<PaymentPage> {
     );
   }
 
-  // ==================== TAMPILAN JIKA BELUM DIBAYAR (QRIS) ====================
   Widget _buildUnpaidQrisSection() {
+    final hasQr = !_isLoadingQr && _qrError == null && _qrImageUrl != null;
+
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.all(20),
@@ -519,7 +597,7 @@ class _PaymentPageState extends State<PaymentPage> {
           ),
           const SizedBox(height: 18),
 
-          // Bingkai QRIS
+          // Bingkai QRIS Asli dari Midtrans
           Container(
             padding: const EdgeInsets.all(16),
             decoration: BoxDecoration(
@@ -542,7 +620,7 @@ class _PaymentPageState extends State<PaymentPage> {
                       ),
                     ),
                     Text(
-                      'Mobile Laundry ID',
+                      'Powered by Midtrans',
                       style: GoogleFonts.poppins(
                         fontSize: 11,
                         fontWeight: FontWeight.w600,
@@ -552,17 +630,45 @@ class _PaymentPageState extends State<PaymentPage> {
                   ],
                 ),
                 const SizedBox(height: 12),
-                // Widget QR Code Visual (Bisa diganti Image.asset('assets/qris.png') jika ada gambar)
                 SizedBox(
-                  width: 190,
-                  height: 190,
-                  child: CustomPaint(
-                    painter: _QrisMockPainter(seed: _orderId + _totalAmount),
-                  ),
+                  width: 210,
+                  height: 210,
+                  child: _isLoadingQr
+                      ? const Center(
+                          child: CircularProgressIndicator(
+                            color: Color(0xFF338CA8),
+                          ),
+                        )
+                      : _qrError != null
+                          ? Column(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: [
+                                Text(
+                                  _qrError!,
+                                  textAlign: TextAlign.center,
+                                  style: GoogleFonts.poppins(
+                                    fontSize: 11,
+                                    color: Colors.redAccent,
+                                  ),
+                                ),
+                                const SizedBox(height: 8),
+                                TextButton(
+                                  onPressed: _generateMidtransQris,
+                                  child: const Text('Coba Lagi'),
+                                ),
+                              ],
+                            )
+                          : Image.network(
+                              _qrImageUrl!,
+                              fit: BoxFit.contain,
+                              errorBuilder: (_, __, ___) => const Center(
+                                child: Text('Gagal memuat gambar QRIS'),
+                              ),
+                            ),
                 ),
-                const SizedBox(height: 10),
+                const SizedBox(height: 8),
                 Text(
-                  'NMID: ID1026001928374',
+                  'Otomatis terverifikasi setelah dibayar',
                   style: GoogleFonts.poppins(
                     fontSize: 10,
                     color: const Color(0xFF64748B),
@@ -572,9 +678,66 @@ class _PaymentPageState extends State<PaymentPage> {
             ),
           ),
 
-          const SizedBox(height: 18),
+          // Tombol Unduh QRIS & Salin Link QRIS
+          if (hasQr) ...[
+            const SizedBox(height: 14),
+            Row(
+              children: [
+                Expanded(
+                  child: OutlinedButton.icon(
+                    onPressed: _isDownloadingQr ? null : _downloadQrImage,
+                    icon: _isDownloadingQr
+                        ? const SizedBox(
+                            width: 15,
+                            height: 15,
+                            child: CircularProgressIndicator(strokeWidth: 2),
+                          )
+                        : const Icon(Icons.download_rounded, size: 17),
+                    label: Text(
+                      'Unduh QR',
+                      style: GoogleFonts.poppins(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                    style: OutlinedButton.styleFrom(
+                      foregroundColor: const Color(0xFF1B4E6C),
+                      side: const BorderSide(color: Color(0xFF338CA8)),
+                      padding: const EdgeInsets.symmetric(vertical: 10),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: OutlinedButton.icon(
+                    onPressed: _copyQrLink,
+                    icon: const Icon(Icons.copy_rounded, size: 16),
+                    label: Text(
+                      'Salin Link QR',
+                      style: GoogleFonts.poppins(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                    style: OutlinedButton.styleFrom(
+                      foregroundColor: const Color(0xFF1B4E6C),
+                      side: const BorderSide(color: Color(0xFF338CA8)),
+                      padding: const EdgeInsets.symmetric(vertical: 10),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ],
 
-          // Panduan singkat pembayaran
+          const SizedBox(height: 16),
+
           Container(
             padding: const EdgeInsets.all(12),
             decoration: BoxDecoration(
@@ -591,7 +754,7 @@ class _PaymentPageState extends State<PaymentPage> {
                 const SizedBox(width: 10),
                 Expanded(
                   child: Text(
-                    'Buka aplikasi m-Banking atau e-Wallet (GoPay, OVO, DANA, ShopeePay), lalu scan kode QR di atas.',
+                    'Unduh kode QR atau salin link-nya untuk diuji melalui Midtrans Sandbox QRIS Simulator.',
                     style: GoogleFonts.poppins(
                       fontSize: 11,
                       color: const Color(0xFF1E465D),
@@ -603,90 +766,37 @@ class _PaymentPageState extends State<PaymentPage> {
             ),
           ),
 
-          const SizedBox(height: 22),
+          const SizedBox(height: 20),
 
-          // Tombol Konfirmasi Pembayaran
           SizedBox(
             width: double.infinity,
-            height: 50,
-            child: ElevatedButton(
-              onPressed: _confirmPayment,
-              style: ElevatedButton.styleFrom(
-                backgroundColor: const Color(0xFF284470),
+            height: 48,
+            child: OutlinedButton(
+              onPressed: _isCheckingStatus ? null : _checkPaymentStatusManually,
+              style: OutlinedButton.styleFrom(
+                side: const BorderSide(color: Color(0xFF284470), width: 1.5),
                 shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(12),
                 ),
               ),
-              child: Text(
-                'Saya Sudah Bayar',
-                style: GoogleFonts.poppins(
-                  fontSize: 14.5,
-                  fontWeight: FontWeight.w600,
-                  color: Colors.white,
-                ),
-              ),
+              child: _isCheckingStatus
+                  ? const SizedBox(
+                      width: 18,
+                      height: 18,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    )
+                  : Text(
+                      'Cek Status Pembayaran',
+                      style: GoogleFonts.poppins(
+                        fontSize: 13.5,
+                        fontWeight: FontWeight.w600,
+                        color: const Color(0xFF284470),
+                      ),
+                    ),
             ),
           ),
         ],
       ),
     );
   }
-}
-
-// Painter QR Code unik berdasarkan Order ID & Nominal agar tampil rapi tanpa error asset
-class _QrisMockPainter extends CustomPainter {
-  final String seed;
-  _QrisMockPainter({required this.seed});
-
-  @override
-  void paint(Canvas canvas, Size size) {
-    final paint = Paint()..color = const Color(0xFF1B4E6C);
-    const int grid = 21;
-    final double cellSize = size.width / grid;
-
-    void drawFinder(int startX, int startY) {
-      for (int y = 0; y < 7; y++) {
-        for (int x = 0; x < 7; x++) {
-          final isBorder = x == 0 || x == 6 || y == 0 || y == 6;
-          final isCenter = x >= 2 && x <= 4 && y >= 2 && y <= 4;
-          if (isBorder || isCenter) {
-            canvas.drawRect(
-              Rect.fromLTWH(
-                (startX + x) * cellSize,
-                (startY + y) * cellSize,
-                cellSize,
-                cellSize,
-              ),
-              paint,
-            );
-          }
-        }
-      }
-    }
-
-    drawFinder(0, 0);
-    drawFinder(grid - 7, 0);
-    drawFinder(0, grid - 7);
-
-    int hash = seed.hashCode;
-    for (int y = 0; y < grid; y++) {
-      for (int x = 0; x < grid; x++) {
-        final inTopLeft = x < 8 && y < 8;
-        final inTopRight = x >= grid - 8 && y < 8;
-        final inBottomLeft = x < 8 && y >= grid - 8;
-        if (inTopLeft || inTopRight || inBottomLeft) continue;
-
-        final val = (hash ^ (x * 31 + y * 17)) & 3;
-        if (val == 0 || val == 1) {
-          canvas.drawRect(
-            Rect.fromLTWH(x * cellSize, y * cellSize, cellSize, cellSize),
-            paint,
-          );
-        }
-      }
-    }
-  }
-
-  @override
-  bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
 }
