@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'app_bottom_nav.dart';
@@ -17,6 +18,8 @@ class _HomePageState extends State<HomePage> {
   int _currentOrderIndex = 0;
   late final PageController _orderPageController;
   bool _isLoadingOrder = true;
+  bool _isFetchingOrders = false;
+  Timer? _orderPollTimer;
 
   // State dinamis untuk Katalog Layanan dari tabel 'services'
   var _services = [];
@@ -26,12 +29,23 @@ class _HomePageState extends State<HomePage> {
   void initState() {
     super.initState();
     _orderPageController = PageController();
-    _fetchActiveOrders();
+    _fetchActiveOrders(initialLoad: true);
     _fetchServices();
+    _startOrderPolling();
+  }
+
+  void _startOrderPolling() {
+    _orderPollTimer?.cancel();
+    _orderPollTimer = Timer.periodic(const Duration(milliseconds: 1500), (_) {
+      if (mounted) {
+        _fetchActiveOrders(initialLoad: false);
+      }
+    });
   }
 
   @override
   void dispose() {
+    _orderPollTimer?.cancel();
     _orderPageController.dispose();
     super.dispose();
   }
@@ -50,8 +64,14 @@ class _HomePageState extends State<HomePage> {
     }
   }
 
-  Future<void> _fetchActiveOrders() async {
-    setState(() => _isLoadingOrder = true);
+  Future<void> _fetchActiveOrders({bool initialLoad = false}) async {
+    if (_isFetchingOrders) return;
+    _isFetchingOrders = true;
+
+    if (initialLoad && _activeOrders.isEmpty && mounted) {
+      setState(() => _isLoadingOrder = true);
+    }
+
     try {
       var query = Supabase.instance.client
           .from('orders')
@@ -73,7 +93,7 @@ class _HomePageState extends State<HomePage> {
         final serviceName = (row['service_name'] ?? 'Laundry').toString();
         final assetImg = _resolveServiceAsset(serviceName);
         final rawPaymentStatus =
-        (row['payment_status'] ?? '').toString().toLowerCase();
+            (row['payment_status'] ?? '').toString().toLowerCase();
 
         parsedOrders.add({
           'dbId': row['id'].toString(),
@@ -86,9 +106,9 @@ class _HomePageState extends State<HomePage> {
           'detergent': (row['detergent_name'] ?? '-').toString(),
           'pickupMethod': (row['pickup_method'] ?? 'Penjemputan').toString(),
           'deliveryMethod':
-          (row['delivery_method'] ?? 'Diantar Kurir').toString(),
+              (row['delivery_method'] ?? 'Diantar Kurir').toString(),
           'method':
-          '${row['pickup_method'] ?? '-'} • ${row['delivery_method'] ?? '-'}',
+              '${row['pickup_method'] ?? '-'} • ${row['delivery_method'] ?? '-'}',
           'address': (row['address'] ?? '-').toString(),
           'totalPrice': 'Rp ${row['total_price'] ?? 0}',
           'status': (row['status'] ?? 'Diproses').toString(),
@@ -120,7 +140,11 @@ class _HomePageState extends State<HomePage> {
         _isLoadingOrder = false;
       });
     } catch (_) {
-      if (mounted) setState(() => _isLoadingOrder = false);
+      if (mounted && initialLoad) {
+        setState(() => _isLoadingOrder = false);
+      }
+    } finally {
+      _isFetchingOrders = false;
     }
   }
 
@@ -135,8 +159,19 @@ class _HomePageState extends State<HomePage> {
 
       if (!mounted) return;
 
+      final updatedList = [];
+      for (final raw in (response as List)) {
+        final item = Map<String, dynamic>.from(raw as Map);
+        final name = (item['name'] ?? '').toString().toLowerCase();
+        // Pastikan harga awal Bed Cover selalu Rp 20.000
+        if (name.contains('bed cover') || name.contains('bedcover')) {
+          item['price'] = 20000;
+        }
+        updatedList.add(item);
+      }
+
       setState(() {
-        _services = List.from(response);
+        _services = updatedList;
         _isLoadingServices = false;
       });
     } catch (_) {
@@ -159,12 +194,12 @@ class _HomePageState extends State<HomePage> {
     return 'assets/laundrysatuan2.png';
   }
 
-  // Format angka harga ke format Rupiah (contoh: 15000 -> Rp 15.000/pcs)
+  // Format angka harga ke format Rupiah (contoh: 20000 -> Rp 20.000/pcs)
   String _formatServicePrice(dynamic rawPrice, dynamic rawUnit) {
     final int price = int.tryParse(rawPrice.toString()) ?? 0;
     final formattedNumber = price.toString().replaceAllMapped(
       RegExp(r'(\d{1,3})(?=(\d{3})+(?!\d))'),
-          (Match m) => '${m[1]}.',
+      (Match m) => '${m[1]}.',
     );
     final unit = (rawUnit ?? '').toString().trim();
     if (unit.isNotEmpty) {
@@ -178,7 +213,7 @@ class _HomePageState extends State<HomePage> {
       context,
       '/status-pesanan',
       arguments: order,
-    ).then((_) => _fetchActiveOrders());
+    ).then((_) => _fetchActiveOrders(initialLoad: false));
   }
 
   void _navigateToBooking(String serviceName) {
@@ -187,7 +222,7 @@ class _HomePageState extends State<HomePage> {
       '/booking',
       arguments: serviceName,
     ).then((_) {
-      _fetchActiveOrders();
+      _fetchActiveOrders(initialLoad: false);
       _fetchServices();
     });
   }
@@ -483,7 +518,7 @@ class _HomePageState extends State<HomePage> {
             },
             itemBuilder: (context, index) {
               final order =
-              Map<String, dynamic>.from(_activeOrders[index] as Map);
+                  Map<String, dynamic>.from(_activeOrders[index] as Map);
               return Padding(
                 padding: const EdgeInsets.symmetric(
                   horizontal: 20,
@@ -492,7 +527,7 @@ class _HomePageState extends State<HomePage> {
                 child: _buildActiveOrderCard(
                   order: order,
                   positionLabel:
-                  hasMultiple ? '${index + 1}/${_activeOrders.length}' : null,
+                      hasMultiple ? '${index + 1}/${_activeOrders.length}' : null,
                   showStepControls: hasMultiple,
                 ),
               );
@@ -541,7 +576,7 @@ class _HomePageState extends State<HomePage> {
         child: RefreshIndicator(
           onRefresh: () async {
             await Future.wait([
-              _fetchActiveOrders(),
+              _fetchActiveOrders(initialLoad: false),
               _fetchServices(),
             ]);
           },
@@ -663,7 +698,7 @@ class _HomePageState extends State<HomePage> {
                             decoration: BoxDecoration(
                               shape: BoxShape.circle,
                               border:
-                              Border.all(color: Colors.white, width: 2.5),
+                                  Border.all(color: Colors.white, width: 2.5),
                               boxShadow: [
                                 BoxShadow(
                                   color: const Color(0xFF1B4E6C)
@@ -723,59 +758,59 @@ class _HomePageState extends State<HomePage> {
                   padding: const EdgeInsets.symmetric(horizontal: 20),
                   child: _isLoadingServices
                       ? const Center(
-                    child: Padding(
-                      padding: EdgeInsets.symmetric(vertical: 40),
-                      child: CircularProgressIndicator(
-                        color: Color(0xFF338CA8),
-                      ),
-                    ),
-                  )
+                          child: Padding(
+                            padding: EdgeInsets.symmetric(vertical: 40),
+                            child: CircularProgressIndicator(
+                              color: Color(0xFF338CA8),
+                            ),
+                          ),
+                        )
                       : _services.isEmpty
-                      ? Center(
-                    child: Padding(
-                      padding:
-                      const EdgeInsets.symmetric(vertical: 32),
-                      child: Text(
-                        'Belum ada layanan tersedia.',
-                        style: GoogleFonts.poppins(
-                          fontSize: 13,
-                          color: const Color(0xFF64748B),
-                        ),
-                      ),
-                    ),
-                  )
-                      : GridView.builder(
-                    shrinkWrap: true,
-                    physics: const NeverScrollableScrollPhysics(),
-                    itemCount: _services.length,
-                    gridDelegate:
-                    const SliverGridDelegateWithFixedCrossAxisCount(
-                      crossAxisCount: 2,
-                      crossAxisSpacing: 14,
-                      mainAxisSpacing: 14,
-                      mainAxisExtent: 256,
-                    ),
-                    itemBuilder: (context, index) {
-                      final service = _services[index];
-                      final name =
-                      (service['name'] ?? 'Layanan').toString();
-                      final subtitle =
-                      (service['subtitle'] ?? '').toString();
-                      final formattedPrice = _formatServicePrice(
-                        service['price'],
-                        service['unit'],
-                      );
-                      final assetPath = _resolveServiceAsset(name);
+                          ? Center(
+                              child: Padding(
+                                padding:
+                                    const EdgeInsets.symmetric(vertical: 32),
+                                child: Text(
+                                  'Belum ada layanan tersedia.',
+                                  style: GoogleFonts.poppins(
+                                    fontSize: 13,
+                                    color: const Color(0xFF64748B),
+                                  ),
+                                ),
+                              ),
+                            )
+                          : GridView.builder(
+                              shrinkWrap: true,
+                              physics: const NeverScrollableScrollPhysics(),
+                              itemCount: _services.length,
+                              gridDelegate:
+                                  const SliverGridDelegateWithFixedCrossAxisCount(
+                                crossAxisCount: 2,
+                                crossAxisSpacing: 14,
+                                mainAxisSpacing: 14,
+                                mainAxisExtent: 256,
+                              ),
+                              itemBuilder: (context, index) {
+                                final service = _services[index];
+                                final name =
+                                    (service['name'] ?? 'Layanan').toString();
+                                final subtitle =
+                                    (service['subtitle'] ?? '').toString();
+                                final formattedPrice = _formatServicePrice(
+                                  service['price'],
+                                  service['unit'],
+                                );
+                                final assetPath = _resolveServiceAsset(name);
 
-                      return _buildServiceCard(
-                        title: name,
-                        desc: subtitle,
-                        price: formattedPrice,
-                        imagePath: assetPath,
-                        onTap: () => _navigateToBooking(name),
-                      );
-                    },
-                  ),
+                                return _buildServiceCard(
+                                  title: name,
+                                  desc: subtitle,
+                                  price: formattedPrice,
+                                  imagePath: assetPath,
+                                  onTap: () => _navigateToBooking(name),
+                                );
+                              },
+                            ),
                 ),
                 const SizedBox(height: 30),
               ],

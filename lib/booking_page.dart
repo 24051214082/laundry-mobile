@@ -40,16 +40,22 @@ class _BookingPageState extends State<BookingPage> {
     'Set Seprei': 25000,
   };
 
+  // Harga paket takaran add-on:
+  // Deterjen = 2 saset/takar per pencucian (Rp2.000)
+  // Pewangi  = 3 saset/takar per pencucian (Rp3.000)
+  static const int _hargaPaketDeterjen = 2000;
+  static const int _hargaPaketPewangi = 3000;
+
   // Daftar Deterjen & Pewangi tersedia dari tabel `addons` (is_available == true)
   final List<dynamic> _deterjenOptions = [
-    {'name': 'Rinso Gentle', 'price': 1000},
-    {'name': 'Attack Higienis', 'price': 1000},
+    {'name': 'Rinso Gentle', 'price': _hargaPaketDeterjen},
+    {'name': 'Attack Higienis', 'price': _hargaPaketDeterjen},
   ];
 
   final List<dynamic> _pewangiOptions = [
-    {'name': 'Molto Floral', 'price': 1000},
-    {'name': 'Downy Mystique', 'price': 1000},
-    {'name': 'So Klin Pelembut', 'price': 1000},
+    {'name': 'Molto Floral', 'price': _hargaPaketPewangi},
+    {'name': 'Downy Mystique', 'price': _hargaPaketPewangi},
+    {'name': 'So Klin Pelembut', 'price': _hargaPaketPewangi},
   ];
 
   // Kecepatan Layanan
@@ -89,7 +95,6 @@ class _BookingPageState extends State<BookingPage> {
       _selectedDate = today;
       _selectedTime = const TimeOfDay(hour: 9, minute: 0);
     } else if (now.hour >= 20) {
-      // Jika sudah lewat jam 20:00 malam, otomatis jadwalkan besok pagi jam 09:00
       _selectedDate = today.add(const Duration(days: 1));
       _selectedTime = const TimeOfDay(hour: 9, minute: 0);
     } else {
@@ -105,8 +110,6 @@ class _BookingPageState extends State<BookingPage> {
     _initDefaultSchedule();
     _alamatPengantaran = TextEditingController(text: _alamatLaundryOutlet);
 
-    // Alamat penjemputan & pengiriman terisi otomatis dari alamat utama
-    // di profil, tapi tetap bisa diubah khusus untuk pesanan ini.
     final alamatUtama = UserProfileStore.instance.address;
     _alamatPenjemputan = TextEditingController(text: alamatUtama);
     _alamatPengiriman = TextEditingController(text: alamatUtama);
@@ -180,14 +183,14 @@ class _BookingPageState extends State<BookingPage> {
             final category =
                 (row['category'] ?? '').toString().trim().toLowerCase();
             final name = (row['name'] ?? '').toString().trim();
-            final price = _parseIntPrice(row['price'], 1000);
 
             if (name.isEmpty) continue;
 
+            // Deterjen pakai 2 saset/takar (Rp2.000), Pewangi pakai 3 saset/takar (Rp3.000)
             if (category == 'deterjen') {
-              deterjenList.add({'name': name, 'price': price});
+              deterjenList.add({'name': name, 'price': _hargaPaketDeterjen});
             } else if (category == 'pewangi') {
-              pewangiList.add({'name': name, 'price': price});
+              pewangiList.add({'name': name, 'price': _hargaPaketPewangi});
             }
           }
 
@@ -228,13 +231,13 @@ class _BookingPageState extends State<BookingPage> {
     }
   }
 
-  int _getAddonPrice(List<dynamic> list, String name) {
+  int _getAddonPrice(List<dynamic> list, String name, int fallback) {
     for (final item in list) {
       if (item['name'] == name) {
-        return _parseIntPrice(item['price'], 1000);
+        return _parseIntPrice(item['price'], fallback);
       }
     }
-    return 1000;
+    return fallback;
   }
 
   String _formatBadge(int price) {
@@ -252,9 +255,13 @@ class _BookingPageState extends State<BookingPage> {
       final args = ModalRoute.of(context)?.settings.arguments;
       if (args is String && args.isNotEmpty) {
         _selectedService = args;
-        // Khusus Boneka, otomatis kunci ke Cuci Saja
-        if (_selectedService == 'Boneka') {
+        // Atur jenis pengerjaan otomatis sesuai karakter masing-masing layanan
+        if (_selectedService == 'Boneka' || _selectedService == 'Bed Cover') {
           _pengerjaan = 'Cuci saja';
+        } else if (_selectedService == 'Laundry Satuan') {
+          _pengerjaan = 'Cuci + Setrika & Packing Spesial';
+        } else {
+          _pengerjaan = 'Cuci + Setrika';
         }
       }
       _isInit = false;
@@ -558,11 +565,16 @@ class _BookingPageState extends State<BookingPage> {
             // ================= 2. Jenis Pengerjaan =================
             _buildSectionHeader(
               'Jenis Pengerjaan',
-              _isBoneka ? 'Cuci Saja untuk Boneka' : 'Pilih perlakuan cucian',
+              _isBoneka
+                  ? 'Cuci Saja untuk Boneka'
+                  : _isBedCover
+                      ? 'Cuci & Pengeringan Maksimal untuk Bed Cover'
+                      : _isSatuan
+                          ? 'Otomatis termasuk Setrika Uap & Packing Spesial'
+                          : 'Pilih perlakuan cucian',
             ),
             const SizedBox(height: 10),
 
-            // Khusus Boneka: Kunci ke Cuci Saja + Alert Box Oranye
             if (_isBoneka) ...[
               Container(
                 width: double.infinity,
@@ -591,8 +603,78 @@ class _BookingPageState extends State<BookingPage> {
                   ],
                 ),
               ),
+            ] else if (_isBedCover) ...[
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFFEF3C7),
+                  borderRadius: BorderRadius.circular(10),
+                  border: Border.all(color: const Color(0xFFF59E0B)),
+                ),
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Icon(Icons.info_outline,
+                        color: Color(0xFFB45309), size: 20),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        'Untuk bed cover, berlaku "Cuci saja" (dikeringkan maksimal & dilipat rapi dalam kemasan khusus) agar isian dakron tetap mengembang dan tidak rusak terkena panas setrika.',
+                        style: GoogleFonts.poppins(
+                          fontSize: 11,
+                          color: const Color(0xFF92400E),
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ] else if (_isSatuan) ...[
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFE8F6FC),
+                  borderRadius: BorderRadius.circular(10),
+                  border: Border.all(color: const Color(0xFF338CA8)),
+                ),
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Icon(Icons.auto_awesome_rounded,
+                        color: Color(0xFF1B4E6C), size: 20),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            'Termasuk Cuci + Setrika & Packing Spesial',
+                            style: GoogleFonts.poppins(
+                              fontSize: 11.5,
+                              color: const Color(0xFF1B4E6C),
+                              fontWeight: FontWeight.w700,
+                            ),
+                          ),
+                          const SizedBox(height: 2),
+                          Text(
+                            'Setiap pakaian satuan otomatis disetrika rapi dengan perawatan khusus dan dikemas menggunakan hanger / plastik pelindung spesial agar tetap rapi.',
+                            style: GoogleFonts.poppins(
+                              fontSize: 10.5,
+                              color: const Color(0xFF28546A),
+                              height: 1.35,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+              ),
             ] else ...[
-              // Selain Boneka (Kiloan, Satuan, Bed Cover): Tetap normal bisa pilih keduanya
+              // Khusus Laundry Kiloan: Bisa pilih Cuci Saja atau Cuci + Setrika
               Row(
                 children: [
                   Expanded(
@@ -623,7 +705,7 @@ class _BookingPageState extends State<BookingPage> {
 
             // ================= 3. Deterjen & Pewangi =================
             _buildSectionHeader('Deterjen & Pewangi Khusus',
-                'Pilih merk atau gunakan bawaan'),
+                'Deterjen 2 saset (+Rp2rb) • Pewangi 3 saset (+Rp3rb)'),
             const SizedBox(height: 10),
             Container(
               padding: const EdgeInsets.all(14),
@@ -639,75 +721,128 @@ class _BookingPageState extends State<BookingPage> {
                   ),
                 ],
               ),
-              child: Row(
+              child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  // Deterjen
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          'Pilihan Deterjen',
-                          style: GoogleFonts.poppins(
-                            fontSize: 12,
-                            fontWeight: FontWeight.w700,
-                            color: const Color(0xFF1B4E6C),
-                          ),
+                  Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      // Deterjen (2 saset = Rp2.000)
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              'Pilihan Deterjen',
+                              style: GoogleFonts.poppins(
+                                fontSize: 12,
+                                fontWeight: FontWeight.w700,
+                                color: const Color(0xFF1B4E6C),
+                              ),
+                            ),
+                            Text(
+                              'Dapat 2 saset / cuci',
+                              style: GoogleFonts.poppins(
+                                fontSize: 9.5,
+                                color: const Color(0xFF64748B),
+                              ),
+                            ),
+                            const SizedBox(height: 6),
+                            ..._deterjenOptions.map((item) {
+                              final name = item['name'].toString();
+                              final price = _parseIntPrice(
+                                  item['price'], _hargaPaketDeterjen);
+                              return _buildRadioItem(
+                                label: name,
+                                badge: _formatBadge(price),
+                                value: name,
+                                groupValue: _deterjen,
+                                onChanged: (val) =>
+                                    setState(() => _deterjen = val!),
+                              );
+                            }),
+                            _buildRadioItem(
+                              label: 'Standar / Bawa Sendiri',
+                              value: 'tanpa',
+                              groupValue: _deterjen,
+                              onChanged: (val) =>
+                                  setState(() => _deterjen = val!),
+                            ),
+                          ],
                         ),
-                        const SizedBox(height: 6),
-                        ..._deterjenOptions.map((item) {
-                          final name = item['name'].toString();
-                          final price = _parseIntPrice(item['price'], 1000);
-                          return _buildRadioItem(
-                            label: name,
-                            badge: _formatBadge(price),
-                            value: name,
-                            groupValue: _deterjen,
-                            onChanged: (val) =>
-                                setState(() => _deterjen = val!),
-                          );
-                        }),
-                        _buildRadioItem(
-                          label: 'Standar / Bawa Sendiri',
-                          value: 'tanpa',
-                          groupValue: _deterjen,
-                          onChanged: (val) => setState(() => _deterjen = val!),
+                      ),
+                      const SizedBox(width: 12),
+                      // Pewangi (3 saset = Rp3.000)
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              'Pilihan Pewangi',
+                              style: GoogleFonts.poppins(
+                                fontSize: 12,
+                                fontWeight: FontWeight.w700,
+                                color: const Color(0xFF1B4E6C),
+                              ),
+                            ),
+                            Text(
+                              'Dapat 3 saset / bilas',
+                              style: GoogleFonts.poppins(
+                                fontSize: 9.5,
+                                color: const Color(0xFF64748B),
+                              ),
+                            ),
+                            const SizedBox(height: 6),
+                            ..._pewangiOptions.map((item) {
+                              final name = item['name'].toString();
+                              final price = _parseIntPrice(
+                                  item['price'], _hargaPaketPewangi);
+                              return _buildRadioItem(
+                                label: name,
+                                badge: _formatBadge(price),
+                                value: name,
+                                groupValue: _pewangi,
+                                onChanged: (val) =>
+                                    setState(() => _pewangi = val!),
+                              );
+                            }),
+                            _buildRadioItem(
+                              label: 'Standar / Bawa Sendiri',
+                              value: 'tanpa',
+                              groupValue: _pewangi,
+                              onChanged: (val) =>
+                                  setState(() => _pewangi = val!),
+                            ),
+                          ],
                         ),
-                      ],
-                    ),
+                      ),
+                    ],
                   ),
-                  const SizedBox(width: 12),
-                  // Pewangi
-                  Expanded(
-                    child: Column(
+                  const SizedBox(height: 12),
+                  Container(
+                    padding: const EdgeInsets.all(10),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFE0F2FE),
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: Row(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Text(
-                          'Pilihan Pewangi',
-                          style: GoogleFonts.poppins(
-                            fontSize: 12,
-                            fontWeight: FontWeight.w700,
-                            color: const Color(0xFF1B4E6C),
-                          ),
+                        const Icon(
+                          Icons.info_outline,
+                          color: Color(0xFF0369A1),
+                          size: 17,
                         ),
-                        const SizedBox(height: 6),
-                        ..._pewangiOptions.map((item) {
-                          final name = item['name'].toString();
-                          final price = _parseIntPrice(item['price'], 1000);
-                          return _buildRadioItem(
-                            label: name,
-                            badge: _formatBadge(price),
-                            value: name,
-                            groupValue: _pewangi,
-                            onChanged: (val) => setState(() => _pewangi = val!),
-                          );
-                        }),
-                        _buildRadioItem(
-                          label: 'Standar / Bawa Sendiri',
-                          value: 'tanpa',
-                          groupValue: _pewangi,
-                          onChanged: (val) => setState(() => _pewangi = val!),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: Text(
+                            'Catatan Takaran: Setiap pilihan deterjen sudah termasuk 2 saset (Rp2.000) dan setiap pilihan pewangi sudah termasuk 3 saset (Rp3.000) untuk 1x proses pencucian agar bersih dan wangi maksimal.',
+                            style: GoogleFonts.poppins(
+                              fontSize: 10.2,
+                              color: const Color(0xFF0C4A6E),
+                              height: 1.4,
+                            ),
+                          ),
                         ),
                       ],
                     ),
@@ -1058,22 +1193,30 @@ class _BookingPageState extends State<BookingPage> {
     } else if (_isSatuan) {
       labelLayanan = 'Satuan: $_barangSatuan';
       final hargaItem = _hargaSatuan[_barangSatuan] ?? 15000;
-      tambah('Satuan ($_barangSatuan)', hargaItem);
+      tambah('Satuan ($_barangSatuan) + Setrika & Packing Spesial', hargaItem);
     } else {
       biaya.add(CostItem(_selectedService, 'Dihitung admin'));
     }
 
     if (_kecepatan == 'Express') tambah('Layanan Express', _biayaExpress);
-    if (_pengerjaan == 'Cuci + Setrika') {
+
+    // Biaya tambahan setrika Rp5.000 hanya berlaku untuk Laundry Kiloan
+    // (Satuan sudah include setrika + packing spesial; Boneka & Bed Cover Cuci Saja)
+    if (_selectedService == 'Laundry Kiloan' && _pengerjaan == 'Cuci + Setrika') {
       tambah('Layanan Cuci + Setrika', _biayaSetrika);
     }
+
     if (_deterjen != 'tanpa') {
-      tambah('Deterjen ($_deterjen)',
-          _getAddonPrice(_deterjenOptions, _deterjen));
+      tambah(
+        'Deterjen ($_deterjen - 2 saset)',
+        _getAddonPrice(_deterjenOptions, _deterjen, _hargaPaketDeterjen),
+      );
     }
     if (_pewangi != 'tanpa') {
       tambah(
-          'Pewangi ($_pewangi)', _getAddonPrice(_pewangiOptions, _pewangi));
+        'Pewangi ($_pewangi - 3 saset)',
+        _getAddonPrice(_pewangiOptions, _pewangi, _hargaPaketPewangi),
+      );
     }
 
     var finalAlamat = _isAntarSendiri
@@ -1098,8 +1241,12 @@ class _BookingPageState extends State<BookingPage> {
         jenisLaundry: labelLayanan,
         kecepatan: _kecepatan,
         pengerjaan: _pengerjaan,
-        deterjen: _deterjen == 'tanpa' ? 'Standar / Bawa Sendiri' : _deterjen,
-        pewangi: _pewangi == 'tanpa' ? 'Standar / Bawa Sendiri' : _pewangi,
+        deterjen: _deterjen == 'tanpa'
+            ? 'Standar / Bawa Sendiri'
+            : '$_deterjen (2 saset)',
+        pewangi: _pewangi == 'tanpa'
+            ? 'Standar / Bawa Sendiri'
+            : '$_pewangi (3 saset)',
         metode: 'Jemput: $_metode • Kirim: $_pengiriman',
         pickupMethod: _metode,
         deliveryMethod: _pengiriman,

@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'payment_page.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
@@ -12,15 +13,35 @@ class StatusPesananPage extends StatefulWidget {
 class _StatusPesananPageState extends State<StatusPesananPage> {
   bool _isPaid = false;
   bool _isInit = false;
+  bool _isFetching = false;
+  Timer? _pollTimer;
 
   late Map<String, dynamic> _orderData;
 
+  @override
+  void initState() {
+    super.initState();
+    _pollTimer = Timer.periodic(const Duration(milliseconds: 1500), (_) {
+      if (mounted && _isInit) {
+        _fetchLatestOrder();
+      }
+    });
+  }
+
+  @override
+  void dispose() {
+    _pollTimer?.cancel();
+    super.dispose();
+  }
+
   Future<void> _fetchLatestOrder() async {
+    if (_isFetching) return;
     final String? dbId = _orderData['dbId']?.toString();
     final String? orderCode = _orderData['orderId']?.toString();
     if ((dbId == null || dbId.isEmpty) &&
         (orderCode == null || orderCode.isEmpty)) return;
 
+    _isFetching = true;
     try {
       var query = Supabase.instance.client.from('orders').select();
       query = (dbId != null && dbId.isNotEmpty)
@@ -47,7 +68,10 @@ class _StatusPesananPageState extends State<StatusPesananPage> {
         _isPaid = (row['payment_status']?.toString().toLowerCase() == 'lunas');
         _orderData['isPaid'] = _isPaid;
       });
-    } catch (_) {}
+    } catch (_) {
+    } finally {
+      _isFetching = false;
+    }
   }
 
   int _getCurrentStepIndex(String status) {
@@ -122,6 +146,7 @@ class _StatusPesananPageState extends State<StatusPesananPage> {
         _isPaid = true;
         _orderData['isPaid'] = true;
       });
+      _fetchLatestOrder();
     }
   }
 
