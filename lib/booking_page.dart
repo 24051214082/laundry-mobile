@@ -78,12 +78,31 @@ class _BookingPageState extends State<BookingPage> {
   late final TextEditingController _alamatPengiriman;
   final TextEditingController _catatan = TextEditingController();
 
-  DateTime _selectedDate = DateTime(2026, 11, 6);
-  TimeOfDay _selectedTime = const TimeOfDay(hour: 9, minute: 0);
+  late DateTime _selectedDate;
+  late TimeOfDay _selectedTime;
+
+  void _initDefaultSchedule() {
+    final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
+
+    if (now.hour < 8) {
+      _selectedDate = today;
+      _selectedTime = const TimeOfDay(hour: 9, minute: 0);
+    } else if (now.hour >= 20) {
+      // Jika sudah lewat jam 20:00 malam, otomatis jadwalkan besok pagi jam 09:00
+      _selectedDate = today.add(const Duration(days: 1));
+      _selectedTime = const TimeOfDay(hour: 9, minute: 0);
+    } else {
+      _selectedDate = today;
+      final nextHour = (now.hour + 1).clamp(9, 20);
+      _selectedTime = TimeOfDay(hour: nextHour, minute: 0);
+    }
+  }
 
   @override
   void initState() {
     super.initState();
+    _initDefaultSchedule();
     _alamatPengantaran = TextEditingController(text: _alamatLaundryOutlet);
 
     // Alamat penjemputan & pengiriman terisi otomatis dari alamat utama
@@ -115,7 +134,7 @@ class _BookingPageState extends State<BookingPage> {
 
       // 3. Ambil add-on yang tersedia saja (is_available == true) dari tabel `addons`
       final addonsData =
-      await client.from('addons').select().eq('is_available', true);
+          await client.from('addons').select().eq('is_available', true);
       if (!mounted) return;
 
       setState(() {
@@ -159,7 +178,7 @@ class _BookingPageState extends State<BookingPage> {
 
           for (final row in addonsData) {
             final category =
-            (row['category'] ?? '').toString().trim().toLowerCase();
+                (row['category'] ?? '').toString().trim().toLowerCase();
             final name = (row['name'] ?? '').toString().trim();
             final price = _parseIntPrice(row['price'], 1000);
 
@@ -259,6 +278,9 @@ class _BookingPageState extends State<BookingPage> {
 
   @override
   Widget build(BuildContext context) {
+    final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
+
     return Scaffold(
       backgroundColor: const Color(0xFFF7FBFD),
       appBar: AppBar(
@@ -324,10 +346,10 @@ class _BookingPageState extends State<BookingPage> {
                       _isBoneka
                           ? Icons.smart_toy_outlined
                           : _isSatuan
-                          ? Icons.checkroom_rounded
-                          : _isBedCover
-                          ? Icons.bed_rounded
-                          : Icons.scale_rounded,
+                              ? Icons.checkroom_rounded
+                              : _isBedCover
+                                  ? Icons.bed_rounded
+                                  : Icons.scale_rounded,
                       color: Colors.white,
                       size: 26,
                     ),
@@ -390,7 +412,7 @@ class _BookingPageState extends State<BookingPage> {
                             style: GoogleFonts.poppins(
                               fontSize: 11,
                               fontWeight:
-                              isPicked ? FontWeight.w600 : FontWeight.w400,
+                                  isPicked ? FontWeight.w600 : FontWeight.w400,
                               color: isPicked
                                   ? Colors.white
                                   : const Color(0xFF28546A),
@@ -735,7 +757,7 @@ class _BookingPageState extends State<BookingPage> {
                 if (_isAntarSendiri)
                   Container(
                     padding:
-                    const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                        const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
                     decoration: BoxDecoration(
                       color: Colors.grey.shade200,
                       borderRadius: BorderRadius.circular(4),
@@ -758,16 +780,20 @@ class _BookingPageState extends State<BookingPage> {
                       onTap: _isAntarSendiri
                           ? null
                           : () async {
-                        final picked = await showDatePicker(
-                          context: context,
-                          initialDate: _selectedDate,
-                          firstDate: DateTime(2026),
-                          lastDate: DateTime(2030),
-                        );
-                        if (picked != null) {
-                          setState(() => _selectedDate = picked);
-                        }
-                      },
+                              final initialPickerDate =
+                                  _selectedDate.isBefore(today)
+                                      ? today
+                                      : _selectedDate;
+                              final picked = await showDatePicker(
+                                context: context,
+                                initialDate: initialPickerDate,
+                                firstDate: today,
+                                lastDate: today.add(const Duration(days: 365)),
+                              );
+                              if (picked != null) {
+                                setState(() => _selectedDate = picked);
+                              }
+                            },
                       child: _buildPickerBox(
                         icon: Icons.calendar_today_rounded,
                         label: 'Tanggal Jemput',
@@ -782,14 +808,14 @@ class _BookingPageState extends State<BookingPage> {
                       onTap: _isAntarSendiri
                           ? null
                           : () async {
-                        final picked = await showTimePicker(
-                          context: context,
-                          initialTime: _selectedTime,
-                        );
-                        if (picked != null) {
-                          setState(() => _selectedTime = picked);
-                        }
-                      },
+                              final picked = await showTimePicker(
+                                context: context,
+                                initialTime: _selectedTime,
+                              );
+                              if (picked != null) {
+                                setState(() => _selectedTime = picked);
+                              }
+                            },
                       child: _buildPickerBox(
                         icon: Icons.access_time_rounded,
                         label: 'Jam Jemput',
@@ -914,7 +940,7 @@ class _BookingPageState extends State<BookingPage> {
                 style: GoogleFonts.poppins(fontSize: 12),
                 decoration: const InputDecoration(
                   hintText:
-                  'Contoh: Pakaian putih dipisah / jahitan boneka rapuh.',
+                      'Contoh: Pakaian putih dipisah / jahitan boneka rapuh.',
                   border: InputBorder.none,
                   contentPadding: EdgeInsets.all(12),
                 ),
@@ -1084,7 +1110,7 @@ class _BookingPageState extends State<BookingPage> {
         estimatedTotal: hasFixedEstimate ? subtotal : 0,
         biaya: List.castFrom(biaya),
         subtotal:
-        hasFixedEstimate ? _rupiah(subtotal) : 'Menunggu Review Admin',
+            hasFixedEstimate ? _rupiah(subtotal) : 'Menunggu Review Admin',
       ),
     );
   }
@@ -1151,7 +1177,7 @@ class _BookingPageState extends State<BookingPage> {
               ),
               border: InputBorder.none,
               contentPadding:
-              EdgeInsets.symmetric(vertical: 12, horizontal: 10),
+                  EdgeInsets.symmetric(vertical: 12, horizontal: 10),
             ),
           ),
         ),
@@ -1220,7 +1246,7 @@ class _BookingPageState extends State<BookingPage> {
           borderRadius: BorderRadius.circular(10),
           border: Border.all(
             color:
-            isSelected ? const Color(0xFF338CA8) : const Color(0xFFCBD5E1),
+                isSelected ? const Color(0xFF338CA8) : const Color(0xFFCBD5E1),
             width: isSelected ? 1.8 : 1,
           ),
         ),
@@ -1312,7 +1338,7 @@ class _BookingPageState extends State<BookingPage> {
                             ? const Color(0xFF1B4E6C)
                             : const Color(0xFF475569),
                         fontWeight:
-                        isSelected ? FontWeight.w600 : FontWeight.w400,
+                            isSelected ? FontWeight.w600 : FontWeight.w400,
                       ),
                     ),
                   ),
@@ -1360,7 +1386,7 @@ class _BookingPageState extends State<BookingPage> {
           borderRadius: BorderRadius.circular(10),
           border: Border.all(
             color:
-            isSelected ? const Color(0xFF338CA8) : const Color(0xFFCBD5E1),
+                isSelected ? const Color(0xFF338CA8) : const Color(0xFFCBD5E1),
             width: isSelected ? 1.8 : 1,
           ),
         ),
