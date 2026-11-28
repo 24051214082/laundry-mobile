@@ -8,10 +8,10 @@ class OrderNotificationPage extends StatefulWidget {
   const OrderNotificationPage({super.key});
 
   @override
-  State createState() => _OrderNotificationPageState();
+  State<OrderNotificationPage> createState() => _OrderNotificationPageState();
 }
 
-class _OrderNotificationPageState extends State {
+class _OrderNotificationPageState extends State<OrderNotificationPage> {
   bool _isLoading = true;
   List _notifications = [];
 
@@ -53,6 +53,7 @@ class _OrderNotificationPageState extends State {
           final service = (order['service_name'] ?? 'Laundry').toString();
           list.add({
             'id': null,
+            'order_id': order['id'],
             'order_code': code,
             'title': status,
             'message': 'Status pesanan $code ($service) saat ini: $status',
@@ -86,6 +87,37 @@ class _OrderNotificationPageState extends State {
           .from('notifications')
           .update({'is_read': true}).eq('id', id);
     } catch (_) {}
+  }
+
+  Future _onTapNotification(Map item) async {
+    await _markAsRead(item);
+    if (!mounted) return;
+
+    final String orderCode = (item['order_code'] ?? '').toString().trim();
+    final String dbId = (item['order_id'] ?? '').toString().trim();
+
+    if (orderCode.isEmpty && dbId.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          behavior: SnackBarBehavior.floating,
+          backgroundColor: const Color(0xFF1B4E6C),
+          content: Text(
+            'Data detail pesanan tidak ditemukan untuk notifikasi ini.',
+            style: GoogleFonts.poppins(fontSize: 12),
+          ),
+        ),
+      );
+      return;
+    }
+
+    Navigator.pushNamed(
+      context,
+      '/status-pesanan',
+      arguments: <String, dynamic>{
+        if (dbId.isNotEmpty) 'dbId': dbId,
+        if (orderCode.isNotEmpty) 'orderId': orderCode,
+      },
+    ).then((_) => _fetchNotifications());
   }
 
   Future _markAllAsRead() async {
@@ -297,66 +329,66 @@ class _OrderNotificationPageState extends State {
         child: _isLoading
             ? const Center(child: CircularProgressIndicator())
             : _notifications.isEmpty
-                ? ListView(
-                    children: [
-                      SizedBox(
-                        height: MediaQuery.of(context).size.height * 0.65,
-                        child: Column(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            const Icon(Icons.notifications_off_outlined,
-                                size: 64, color: Color(0xFF94A3B8)),
-                            const SizedBox(height: 12),
-                            Text(
-                              'Belum ada notifikasi pesanan',
-                              style: GoogleFonts.poppins(
-                                fontSize: 14,
-                                fontWeight: FontWeight.w600,
-                                color: const Color(0xFF1B4E6C),
-                              ),
-                            ),
-                            const SizedBox(height: 4),
-                            Text(
-                              'Status pesananmu akan muncul otomatis di sini',
-                              style: GoogleFonts.poppins(
-                                fontSize: 11.5,
-                                color: const Color(0xFF64748B),
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ],
-                  )
-                : SingleChildScrollView(
-                    physics: const AlwaysScrollableScrollPhysics(),
-                    padding: const EdgeInsets.symmetric(
-                        horizontal: 20, vertical: 16),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        if (todayList.isNotEmpty) ...[
-                          _buildGroupTitle('Today'),
-                          const SizedBox(height: 10),
-                          ...todayList.map((item) => _buildItemWidget(item)),
-                          const SizedBox(height: 14),
-                        ],
-                        if (yesterdayList.isNotEmpty) ...[
-                          _buildGroupTitle('Yesterday'),
-                          const SizedBox(height: 10),
-                          ...yesterdayList
-                              .map((item) => _buildItemWidget(item)),
-                          const SizedBox(height: 14),
-                        ],
-                        if (earlierList.isNotEmpty) ...[
-                          _buildGroupTitle('Sebelumnya'),
-                          const SizedBox(height: 10),
-                          ...earlierList.map((item) => _buildItemWidget(item)),
-                        ],
-                        const SizedBox(height: 16),
-                      ],
+            ? ListView(
+          children: [
+            SizedBox(
+              height: MediaQuery.of(context).size.height * 0.65,
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  const Icon(Icons.notifications_off_outlined,
+                      size: 64, color: Color(0xFF94A3B8)),
+                  const SizedBox(height: 12),
+                  Text(
+                    'Belum ada notifikasi pesanan',
+                    style: GoogleFonts.poppins(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w600,
+                      color: const Color(0xFF1B4E6C),
                     ),
                   ),
+                  const SizedBox(height: 4),
+                  Text(
+                    'Status pesananmu akan muncul otomatis di sini',
+                    style: GoogleFonts.poppins(
+                      fontSize: 11.5,
+                      color: const Color(0xFF64748B),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        )
+            : SingleChildScrollView(
+          physics: const AlwaysScrollableScrollPhysics(),
+          padding: const EdgeInsets.symmetric(
+              horizontal: 20, vertical: 16),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              if (todayList.isNotEmpty) ...[
+                _buildGroupTitle('Today'),
+                const SizedBox(height: 10),
+                ...todayList.map((item) => _buildItemWidget(item)),
+                const SizedBox(height: 14),
+              ],
+              if (yesterdayList.isNotEmpty) ...[
+                _buildGroupTitle('Yesterday'),
+                const SizedBox(height: 10),
+                ...yesterdayList
+                    .map((item) => _buildItemWidget(item)),
+                const SizedBox(height: 14),
+              ],
+              if (earlierList.isNotEmpty) ...[
+                _buildGroupTitle('Sebelumnya'),
+                const SizedBox(height: 10),
+                ...earlierList.map((item) => _buildItemWidget(item)),
+              ],
+              const SizedBox(height: 16),
+            ],
+          ),
+        ),
       ),
     );
   }
@@ -376,7 +408,7 @@ class _OrderNotificationPageState extends State {
     return Padding(
       padding: const EdgeInsets.only(bottom: 12),
       child: GestureDetector(
-        onTap: () => _markAsRead(item),
+        onTap: () => _onTapNotification(item),
         child: _buildNotificationCard(
           icon: style['icon'] as IconData,
           badgeText: style['badge'] as String,
@@ -500,6 +532,12 @@ class _OrderNotificationPageState extends State {
                 ),
               ],
             ),
+          ),
+          const SizedBox(width: 6),
+          const Icon(
+            Icons.chevron_right_rounded,
+            size: 20,
+            color: Color(0xFF94A3B8),
           ),
         ],
       ),

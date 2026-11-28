@@ -34,7 +34,7 @@ class _AppRouteObserver extends NavigatorObserver {
 
 class RealtimeNotifService {
   static final GlobalKey<NavigatorState> navigatorKey =
-      GlobalKey<NavigatorState>();
+  GlobalKey<NavigatorState>();
 
   static final NavigatorObserver routeObserver = _AppRouteObserver();
 
@@ -119,11 +119,11 @@ class RealtimeNotifService {
           _adminOrderStates.clear();
           for (final dynamic item in rows) {
             final Map<String, dynamic> row =
-                Map<String, dynamic>.from(item as Map);
+            Map<String, dynamic>.from(item as Map);
             final String id = (row['id'] ?? '').toString();
             if (id.isNotEmpty) {
               final String pay =
-                  (row['payment_status'] ?? 'Belum Lunas').toString();
+              (row['payment_status'] ?? 'Belum Lunas').toString();
               final String st = (row['status'] ?? 'Waiting').toString();
               _adminOrderStates[id] = '$pay|$st';
             }
@@ -134,12 +134,12 @@ class RealtimeNotifService {
 
         for (final dynamic item in rows) {
           final Map<String, dynamic> row =
-              Map<String, dynamic>.from(item as Map);
+          Map<String, dynamic>.from(item as Map);
           final String id = (row['id'] ?? '').toString();
           if (id.isEmpty) continue;
 
           final String paymentStatus =
-              (row['payment_status'] ?? 'Belum Lunas').toString();
+          (row['payment_status'] ?? 'Belum Lunas').toString();
           final String orderStatus = (row['status'] ?? 'Waiting').toString();
           final String snapshot = '$paymentStatus|$orderStatus';
 
@@ -147,7 +147,7 @@ class RealtimeNotifService {
           final String cust = (row['customer_name'] ?? 'Pelanggan').toString();
           final String service = (row['service_name'] ?? 'Laundry').toString();
           final String paymentMethod =
-              (row['payment_method'] ?? '').toString();
+          (row['payment_method'] ?? '').toString();
 
           if (!_adminOrderStates.containsKey(id)) {
             _adminOrderStates[id] = snapshot;
@@ -158,7 +158,7 @@ class RealtimeNotifService {
               icon: Icons.shopping_bag_outlined,
               title: 'Pesanan baru masuk dari $cust ($code)',
               subtitle:
-                  'Layanan $service ($paymentStatus) membutuhkan tindak lanjut.',
+              'Layanan $service ($paymentStatus) membutuhkan tindak lanjut.',
               routeOnTap: '/manage-orders',
             );
             break;
@@ -179,7 +179,7 @@ class RealtimeNotifService {
                   icon: Icons.payments_outlined,
                   title: 'Pembayaran Lunas dari $cust ($code)',
                   subtitle:
-                      'Layanan $service telah dibayar${paymentMethod.isNotEmpty ? ' via $paymentMethod' : ''}.',
+                  'Layanan $service telah dibayar${paymentMethod.isNotEmpty ? ' via $paymentMethod' : ''}.',
                   routeOnTap: '/manage-orders',
                 );
                 break;
@@ -211,7 +211,7 @@ class RealtimeNotifService {
 
           if (rows.isNotEmpty) {
             final Map<String, dynamic> latest =
-                Map<String, dynamic>.from(rows.first as Map);
+            Map<String, dynamic>.from(rows.first as Map);
             final String latestId = (latest['id'] ?? '').toString();
 
             if (_lastCustomerNotifId == null) {
@@ -220,22 +220,29 @@ class RealtimeNotifService {
                 latestId != _lastCustomerNotifId) {
               _lastCustomerNotifId = latestId;
               final String title =
-                  (latest['title'] ?? 'Update Pesanan').toString();
-              final String orderCode = (latest['order_code'] ?? '').toString();
+              (latest['title'] ?? 'Update Pesanan').toString();
+              final String orderCode =
+              (latest['order_code'] ?? '').toString().trim();
               final String message = (latest['message'] ??
-                      'Status pesanan Anda telah diperbarui.')
+                  'Status pesanan Anda telah diperbarui.')
                   .toString();
+
+              final bool hasOrderCode = orderCode.isNotEmpty;
 
               showBanner(
                 badge: title,
                 badgeBg: const Color(0xFFD6EFFB),
                 badgeTextColor: const Color(0xFF1B4E6C),
                 icon: Icons.local_laundry_service_rounded,
-                title: orderCode.isNotEmpty
+                title: hasOrderCode
                     ? 'Update Pesanan $orderCode'
                     : 'Pembaruan Status Pesanan',
                 subtitle: message,
-                routeOnTap: '/order-notification',
+                routeOnTap:
+                hasOrderCode ? '/status-pesanan' : '/order-notification',
+                routeArguments: hasOrderCode
+                    ? <String, dynamic>{'orderId': orderCode}
+                    : null,
               );
             }
           }
@@ -261,6 +268,7 @@ class RealtimeNotifService {
     required String title,
     required String subtitle,
     required String routeOnTap,
+    Object? routeArguments,
     Color badgeBg = const Color(0xFFDDD6FE),
     Color badgeTextColor = const Color(0xFF5B21B6),
     IconData icon = Icons.notifications_active_rounded,
@@ -293,7 +301,7 @@ class RealtimeNotifService {
           _hideTimer?.cancel();
           entry.remove();
           if (_activeEntry == entry) _activeEntry = null;
-          navState.pushNamed(routeOnTap);
+          navState.pushNamed(routeOnTap, arguments: routeArguments);
         },
         onDismiss: () {
           _hideTimer?.cancel();

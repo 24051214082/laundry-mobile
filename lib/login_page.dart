@@ -79,114 +79,334 @@ class _LoginPageState extends State<LoginPage> {
 
   void _showForgotPasswordDialog() {
     final resetEmailController = TextEditingController();
+    final newPasswordController = TextEditingController();
+    final confirmPasswordController = TextEditingController();
     final resetFormKey = GlobalKey<FormState>();
+
+    bool isEmailVerified = false;
+    bool isDialogLoading = false;
+    bool obscureNewPass = true;
+    bool obscureConfirmPass = true;
+    String? verifiedUserId;
+    String? errorMessage;
 
     showDialog(
       context: context,
-      builder: (context) {
-        return AlertDialog(
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(20),
-          ),
-          title: Text(
-            'Reset Password',
-            style: GoogleFonts.poppins(
-              fontWeight: FontWeight.w600,
-              fontSize: 18,
-              color: const Color(0xFF2C7D99),
-            ),
-          ),
-          content: Form(
-            key: resetFormKey,
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  'Masukkan email akunmu untuk menerima tautan reset kata sandi.',
-                  style: GoogleFonts.poppins(
-                    fontSize: 13,
-                    color: const Color(0xFF28546A),
+      barrierDismissible: false,
+      builder: (dialogContext) {
+        return StatefulBuilder(
+          builder: (context, setDialogState) {
+            Future<void> verifyEmailInDb() async {
+              if (!resetFormKey.currentState!.validate()) return;
+
+              setDialogState(() {
+                isDialogLoading = true;
+                errorMessage = null;
+              });
+
+              final inputEmail = resetEmailController.text.trim().toLowerCase();
+
+              try {
+                final user = await Supabase.instance.client
+                    .from('users')
+                    .select('id, email')
+                    .ilike('email', inputEmail)
+                    .maybeSingle();
+
+                if (user == null) {
+                  setDialogState(() {
+                    isDialogLoading = false;
+                    errorMessage = 'Email tidak terdaftar di database!';
+                  });
+                  return;
+                }
+
+                setDialogState(() {
+                  isDialogLoading = false;
+                  isEmailVerified = true;
+                  verifiedUserId = user['id'].toString();
+                  errorMessage = null;
+                });
+              } catch (e) {
+                setDialogState(() {
+                  isDialogLoading = false;
+                  errorMessage = 'Gagal mengecek email: $e';
+                });
+              }
+            }
+
+            Future<void> updatePasswordInDb() async {
+              if (!resetFormKey.currentState!.validate()) return;
+              if (verifiedUserId == null) return;
+
+              setDialogState(() {
+                isDialogLoading = true;
+                errorMessage = null;
+              });
+
+              final newPassword = newPasswordController.text.trim();
+
+              try {
+                await Supabase.instance.client
+                    .from('users')
+                    .update({'password_hash': newPassword}).eq(
+                    'id', verifiedUserId!);
+
+                if (!dialogContext.mounted) return;
+                Navigator.pop(dialogContext);
+
+                if (!mounted) return;
+                ScaffoldMessenger.of(this.context).showSnackBar(
+                  SnackBar(
+                    backgroundColor: const Color(0xFF338CA8),
+                    content: Text(
+                      'Password berhasil diperbarui! Silakan login dengan password baru.',
+                      style: GoogleFonts.poppins(fontSize: 12),
+                    ),
+                  ),
+                );
+              } catch (e) {
+                setDialogState(() {
+                  isDialogLoading = false;
+                  errorMessage = 'Gagal menyimpan password baru: $e';
+                });
+              }
+            }
+
+            return AlertDialog(
+              backgroundColor: Colors.white,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(20),
+              ),
+              title: Text(
+                'Reset Password',
+                style: GoogleFonts.poppins(
+                  fontWeight: FontWeight.w600,
+                  fontSize: 18,
+                  color: const Color(0xFF2C7D99),
+                ),
+              ),
+              content: SingleChildScrollView(
+                child: Form(
+                  key: resetFormKey,
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        isEmailVerified
+                            ? 'Akun terverifikasi! Silakan masukkan kata sandi barumu.'
+                            : 'Masukkan email akunmu untuk verifikasi sebelum mengatur ulang kata sandi.',
+                        style: GoogleFonts.poppins(
+                          fontSize: 13,
+                          color: const Color(0xFF28546A),
+                        ),
+                      ),
+                      const SizedBox(height: 16),
+
+                      // Input Email
+                      TextFormField(
+                        controller: resetEmailController,
+                        enabled: !isEmailVerified && !isDialogLoading,
+                        keyboardType: TextInputType.emailAddress,
+                        style: GoogleFonts.poppins(fontSize: 14),
+                        decoration: InputDecoration(
+                          hintText: 'Email',
+                          hintStyle: GoogleFonts.poppins(
+                            color: const Color(0xFFBFD2DC),
+                            fontSize: 14,
+                          ),
+                          filled: true,
+                          fillColor: isEmailVerified
+                              ? const Color(0xFFE2E8F0)
+                              : const Color(0xFFF0F7FA),
+                          border: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(16),
+                            borderSide: BorderSide.none,
+                          ),
+                          prefixIcon: const Icon(
+                            Icons.mail_outline_rounded,
+                            color: Color(0xFFB5C9D5),
+                          ),
+                          suffixIcon: isEmailVerified
+                              ? const Icon(
+                            Icons.check_circle_rounded,
+                            color: Color(0xFF16A34A),
+                          )
+                              : null,
+                        ),
+                        validator: (value) {
+                          if (value == null || value.trim().isEmpty) {
+                            return 'Email wajib diisi';
+                          }
+                          final emailRegex =
+                          RegExp(r'^[\w-\.]+@([\w-]+\.)+[\w-]{2,4}$');
+                          if (!emailRegex.hasMatch(value.trim())) {
+                            return 'Format email tidak valid';
+                          }
+                          return null;
+                        },
+                      ),
+
+                      // Form Password Baru (Muncul setelah email ditemukan di Supabase)
+                      if (isEmailVerified) ...[
+                        const SizedBox(height: 12),
+                        TextFormField(
+                          controller: newPasswordController,
+                          enabled: !isDialogLoading,
+                          obscureText: obscureNewPass,
+                          style: GoogleFonts.poppins(fontSize: 14),
+                          decoration: InputDecoration(
+                            hintText: 'Password Baru (min. 6 karakter)',
+                            hintStyle: GoogleFonts.poppins(
+                              color: const Color(0xFFBFD2DC),
+                              fontSize: 13,
+                            ),
+                            filled: true,
+                            fillColor: const Color(0xFFF0F7FA),
+                            border: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(16),
+                              borderSide: BorderSide.none,
+                            ),
+                            prefixIcon: const Icon(
+                              Icons.lock_outline_rounded,
+                              color: Color(0xFFB5C9D5),
+                            ),
+                            suffixIcon: IconButton(
+                              icon: Icon(
+                                obscureNewPass
+                                    ? Icons.visibility_off_outlined
+                                    : Icons.visibility_outlined,
+                                color: const Color(0xFFB5C9D5),
+                                size: 20,
+                              ),
+                              onPressed: () {
+                                setDialogState(() {
+                                  obscureNewPass = !obscureNewPass;
+                                });
+                              },
+                            ),
+                          ),
+                          validator: (value) {
+                            if (value == null || value.trim().isEmpty) {
+                              return 'Password baru wajib diisi';
+                            }
+                            if (value.trim().length < 6) {
+                              return 'Password minimal 6 karakter';
+                            }
+                            return null;
+                          },
+                        ),
+                        const SizedBox(height: 12),
+                        TextFormField(
+                          controller: confirmPasswordController,
+                          enabled: !isDialogLoading,
+                          obscureText: obscureConfirmPass,
+                          style: GoogleFonts.poppins(fontSize: 14),
+                          decoration: InputDecoration(
+                            hintText: 'Konfirmasi Password Baru',
+                            hintStyle: GoogleFonts.poppins(
+                              color: const Color(0xFFBFD2DC),
+                              fontSize: 13,
+                            ),
+                            filled: true,
+                            fillColor: const Color(0xFFF0F7FA),
+                            border: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(16),
+                              borderSide: BorderSide.none,
+                            ),
+                            prefixIcon: const Icon(
+                              Icons.lock_outline_rounded,
+                              color: Color(0xFFB5C9D5),
+                            ),
+                            suffixIcon: IconButton(
+                              icon: Icon(
+                                obscureConfirmPass
+                                    ? Icons.visibility_off_outlined
+                                    : Icons.visibility_outlined,
+                                color: const Color(0xFFB5C9D5),
+                                size: 20,
+                              ),
+                              onPressed: () {
+                                setDialogState(() {
+                                  obscureConfirmPass = !obscureConfirmPass;
+                                });
+                              },
+                            ),
+                          ),
+                          validator: (value) {
+                            if (value == null || value.trim().isEmpty) {
+                              return 'Konfirmasi password wajib diisi';
+                            }
+                            if (value.trim() !=
+                                newPasswordController.text.trim()) {
+                              return 'Konfirmasi password tidak cocok';
+                            }
+                            return null;
+                          },
+                        ),
+                      ],
+
+                      if (errorMessage != null) ...[
+                        const SizedBox(height: 10),
+                        Text(
+                          errorMessage!,
+                          style: GoogleFonts.poppins(
+                            fontSize: 11.5,
+                            color: Colors.redAccent,
+                            fontWeight: FontWeight.w500,
+                          ),
+                        ),
+                      ],
+                    ],
                   ),
                 ),
-                const SizedBox(height: 16),
-                TextFormField(
-                  controller: resetEmailController,
-                  keyboardType: TextInputType.emailAddress,
-                  style: GoogleFonts.poppins(fontSize: 14),
-                  decoration: InputDecoration(
-                    hintText: 'Email',
-                    hintStyle: GoogleFonts.poppins(
-                      color: const Color(0xFFBFD2DC),
-                      fontSize: 14,
-                    ),
-                    filled: true,
-                    fillColor: const Color(0xFFF0F7FA),
-                    border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(16),
-                      borderSide: BorderSide.none,
-                    ),
-                    prefixIcon: const Icon(
-                      Icons.mail_outline_rounded,
-                      color: Color(0xFFB5C9D5),
+              ),
+              actions: [
+                TextButton(
+                  onPressed: isDialogLoading
+                      ? null
+                      : () => Navigator.pop(dialogContext),
+                  child: Text(
+                    'Batal',
+                    style: GoogleFonts.poppins(
+                      color: Colors.grey,
+                      fontWeight: FontWeight.w500,
                     ),
                   ),
-                  validator: (value) {
-                    if (value == null || value.trim().isEmpty) {
-                      return 'Email wajib diisi';
-                    }
-                    final emailRegex =
-                        RegExp(r'^[\w-\.]+@([\w-]+\.)+[\w-]{2,4}$');
-                    if (!emailRegex.hasMatch(value.trim())) {
-                      return 'Format email tidak valid';
-                    }
-                    return null;
-                  },
+                ),
+                ElevatedButton(
+                  onPressed: isDialogLoading
+                      ? null
+                      : (isEmailVerified
+                      ? updatePasswordInDb
+                      : verifyEmailInDb),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: const Color(0xFF338CA8),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                  ),
+                  child: isDialogLoading
+                      ? const SizedBox(
+                    width: 18,
+                    height: 18,
+                    child: CircularProgressIndicator(
+                      color: Colors.white,
+                      strokeWidth: 2,
+                    ),
+                  )
+                      : Text(
+                    isEmailVerified ? 'Simpan Password' : 'Verifikasi',
+                    style: GoogleFonts.poppins(
+                      color: Colors.white,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
                 ),
               ],
-            ),
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(context),
-              child: Text(
-                'Batal',
-                style: GoogleFonts.poppins(
-                  color: Colors.grey,
-                  fontWeight: FontWeight.w500,
-                ),
-              ),
-            ),
-            ElevatedButton(
-              onPressed: () {
-                if (resetFormKey.currentState!.validate()) {
-                  Navigator.pop(context);
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(
-                      backgroundColor: const Color(0xFF338CA8),
-                      content: Text(
-                        'Tautan reset password berhasil dikirim ke ${resetEmailController.text.trim()}',
-                        style: GoogleFonts.poppins(fontSize: 12),
-                      ),
-                    ),
-                  );
-                }
-              },
-              style: ElevatedButton.styleFrom(
-                backgroundColor: const Color(0xFF338CA8),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(12),
-                ),
-              ),
-              child: Text(
-                'Kirim',
-                style: GoogleFonts.poppins(
-                  color: Colors.white,
-                  fontWeight: FontWeight.w600,
-                ),
-              ),
-            ),
-          ],
+            );
+          },
         );
       },
     );
@@ -211,7 +431,7 @@ class _LoginPageState extends State<LoginPage> {
                   ),
                 ),
                 padding:
-                    const EdgeInsets.symmetric(horizontal: 24, vertical: 20),
+                const EdgeInsets.symmetric(horizontal: 24, vertical: 20),
                 child: Column(
                   children: [
                     Row(
@@ -220,7 +440,7 @@ class _LoginPageState extends State<LoginPage> {
                         Row(
                           children: List.generate(
                             3,
-                            (index) => Container(
+                                (index) => Container(
                               margin: const EdgeInsets.only(right: 5),
                               width: 6,
                               height: 6,
@@ -234,7 +454,7 @@ class _LoginPageState extends State<LoginPage> {
                         Row(
                           children: List.generate(
                             3,
-                            (index) => Container(
+                                (index) => Container(
                               margin: const EdgeInsets.only(left: 5),
                               width: 6,
                               height: 6,
@@ -264,7 +484,7 @@ class _LoginPageState extends State<LoginPage> {
               // Bagian Form Input dan Teks Deskripsi
               Padding(
                 padding:
-                    const EdgeInsets.symmetric(horizontal: 32, vertical: 32),
+                const EdgeInsets.symmetric(horizontal: 32, vertical: 32),
                 child: Form(
                   key: _formKey,
                   child: Column(
@@ -303,7 +523,7 @@ class _LoginPageState extends State<LoginPage> {
                             return 'Email tidak boleh kosong';
                           }
                           final emailRegex =
-                              RegExp(r'^[\w-\.]+@([\w-]+\.)+[\w-]{2,4}$');
+                          RegExp(r'^[\w-\.]+@([\w-]+\.)+[\w-]{2,4}$');
                           if (!emailRegex.hasMatch(value.trim())) {
                             return 'Masukkan email yang valid (contoh: user@mail.com)';
                           }
@@ -351,21 +571,21 @@ class _LoginPageState extends State<LoginPage> {
                           ),
                           child: _isLoading
                               ? const SizedBox(
-                                  width: 22,
-                                  height: 22,
-                                  child: CircularProgressIndicator(
-                                    color: Colors.white,
-                                    strokeWidth: 2.5,
-                                  ),
-                                )
+                            width: 22,
+                            height: 22,
+                            child: CircularProgressIndicator(
+                              color: Colors.white,
+                              strokeWidth: 2.5,
+                            ),
+                          )
                               : Text(
-                                  'Log In',
-                                  style: GoogleFonts.poppins(
-                                    fontSize: 16,
-                                    fontWeight: FontWeight.w600,
-                                    color: Colors.white,
-                                  ),
-                                ),
+                            'Log In',
+                            style: GoogleFonts.poppins(
+                              fontSize: 16,
+                              fontWeight: FontWeight.w600,
+                              color: Colors.white,
+                            ),
+                          ),
                         ),
                       ),
                       const SizedBox(height: 24),
@@ -442,7 +662,7 @@ class _LoginPageState extends State<LoginPage> {
         ),
         decoration: InputDecoration(
           contentPadding:
-              const EdgeInsets.symmetric(horizontal: 22, vertical: 16),
+          const EdgeInsets.symmetric(horizontal: 22, vertical: 16),
           border: InputBorder.none,
           errorStyle: GoogleFonts.poppins(
             fontSize: 11,
@@ -465,15 +685,15 @@ class _LoginPageState extends State<LoginPage> {
           prefixIconConstraints: const BoxConstraints(minWidth: 40),
           suffixIcon: isPassword
               ? IconButton(
-                  icon: Icon(
-                    obscureText
-                        ? Icons.visibility_off_outlined
-                        : Icons.visibility_outlined,
-                    color: const Color(0xFFB5C9D5),
-                    size: 20,
-                  ),
-                  onPressed: onToggleVisibility,
-                )
+            icon: Icon(
+              obscureText
+                  ? Icons.visibility_off_outlined
+                  : Icons.visibility_outlined,
+              color: const Color(0xFFB5C9D5),
+              size: 20,
+            ),
+            onPressed: onToggleVisibility,
+          )
               : null,
         ),
       ),

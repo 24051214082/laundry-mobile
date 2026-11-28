@@ -25,6 +25,7 @@ import 'manage_orders_page.dart';
 import 'payment_page.dart';
 import 'realtime_notif_banner.dart';
 import 'user_session.dart';
+import 'forgot_password_page.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -90,6 +91,7 @@ class MyApp extends StatelessWidget {
         '/admin-chat': (context) => const AdminChatListPage(),
         '/manage-orders': (context) => const ManageOrdersPage(),
         '/payment': (context) => const PaymentPage(),
+        '/forgot-password': (context) => const ForgotPasswordPage(),
       },
     );
   }
