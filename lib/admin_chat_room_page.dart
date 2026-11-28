@@ -220,7 +220,8 @@ class _AdminChatRoomPageState extends State {
 
       if (hasChanged && filtered.isNotEmpty) {
         final newest = Map.from(filtered.last as Map);
-        final role = (newest['sender_role'] ?? '').toString().trim().toLowerCase();
+        final role =
+            (newest['sender_role'] ?? '').toString().trim().toLowerCase();
         if (role == 'customer') {
           final newestCode = (newest['order_code'] ?? '').toString().trim();
           if (newestCode.isNotEmpty && newestCode != _activeOrderId) {
@@ -423,14 +424,68 @@ class _AdminChatRoomPageState extends State {
     });
   }
 
+  DateTime? _parseLocalDate(dynamic rawCreatedAt) {
+    if (rawCreatedAt == null) return DateTime.now();
+    return DateTime.tryParse(rawCreatedAt.toString())?.toLocal();
+  }
+
   String _formatTime(dynamic rawCreatedAt) {
-    if (rawCreatedAt == null) {
-      final now = TimeOfDay.now();
-      return '${now.hour.toString().padLeft(2, '0')}:${now.minute.toString().padLeft(2, '0')}';
-    }
-    final dt = DateTime.tryParse(rawCreatedAt.toString())?.toLocal();
+    final dt = _parseLocalDate(rawCreatedAt);
     if (dt == null) return '';
     return '${dt.hour.toString().padLeft(2, '0')}:${dt.minute.toString().padLeft(2, '0')}';
+  }
+
+  bool _isSameDay(DateTime a, DateTime b) {
+    return a.year == b.year && a.month == b.month && a.day == b.day;
+  }
+
+  String _formatDateHeader(DateTime dt) {
+    final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
+    final yesterday = today.subtract(const Duration(days: 1));
+    final target = DateTime(dt.year, dt.month, dt.day);
+
+    if (_isSameDay(target, today)) return 'Hari ini';
+    if (_isSameDay(target, yesterday)) return 'Kemarin';
+
+    const months = [
+      'Jan',
+      'Feb',
+      'Mar',
+      'Apr',
+      'Mei',
+      'Jun',
+      'Jul',
+      'Agu',
+      'Sep',
+      'Okt',
+      'Nov',
+      'Des',
+    ];
+    return '${dt.day} ${months[dt.month - 1]} ${dt.year}';
+  }
+
+  Widget _buildDateSeparator(String label) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 12),
+      child: Center(
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 5),
+          decoration: BoxDecoration(
+            color: const Color(0xFFE2E8F0).withValues(alpha: 0.85),
+            borderRadius: BorderRadius.circular(14),
+          ),
+          child: Text(
+            label,
+            style: GoogleFonts.poppins(
+              fontSize: 10.5,
+              fontWeight: FontWeight.w600,
+              color: const Color(0xFF475569),
+            ),
+          ),
+        ),
+      ),
+    );
   }
 
   String _getInitials(String name) {
@@ -665,7 +720,7 @@ class _AdminChatRoomPageState extends State {
             ),
           ),
 
-          // Daftar Pesan (reverse: true -> pesan terbaru selalu di paling bawah)
+          // Daftar Pesan + Pembatas Tanggal di Tengah Layar
           Expanded(
             child: _isLoadingMessages
                 ? const Center(
@@ -706,6 +761,8 @@ class _AdminChatRoomPageState extends State {
 
                           final String textContent =
                               (msg['message_text'] ?? '').toString();
+                          final DateTime? currentDt =
+                              _parseLocalDate(msg['created_at']);
                           final String timeContent =
                               _formatTime(msg['created_at']);
                           final String msgOrderCode =
@@ -716,7 +773,24 @@ class _AdminChatRoomPageState extends State {
                           final String msgService =
                               (meta['serviceName'] ?? '').toString();
 
-                          return Align(
+                          // Tampilkan pembatas tanggal di atas pesan pertama hari itu
+                          bool showDateHeader = false;
+                          if (currentDt != null) {
+                            if (index == reversedMessages.length - 1) {
+                              showDateHeader = true;
+                            } else {
+                              final olderMsg = Map.from(
+                                  reversedMessages[index + 1] as Map);
+                              final DateTime? olderDt =
+                                  _parseLocalDate(olderMsg['created_at']);
+                              if (olderDt == null ||
+                                  !_isSameDay(currentDt, olderDt)) {
+                                showDateHeader = true;
+                              }
+                            }
+                          }
+
+                          final bubbleWidget = Align(
                             alignment: isAdmin
                                 ? Alignment.centerRight
                                 : Alignment.centerLeft,
@@ -870,6 +944,19 @@ class _AdminChatRoomPageState extends State {
                               ),
                             ),
                           );
+
+                          if (showDateHeader && currentDt != null) {
+                            return Column(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                _buildDateSeparator(
+                                    _formatDateHeader(currentDt)),
+                                bubbleWidget,
+                              ],
+                            );
+                          }
+
+                          return bubbleWidget;
                         },
                       ),
           ),

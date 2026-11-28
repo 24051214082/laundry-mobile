@@ -48,6 +48,19 @@ class _ChatRoomPageState extends State {
   ];
 
   @override
+  void initState() {
+    super.initState();
+    _startPolling();
+  }
+
+  void _startPolling() {
+    _pollTimer?.cancel();
+    _pollTimer = Timer.periodic(const Duration(milliseconds: 1500), (_) {
+      if (mounted) _fetchMessages(initialLoad: false);
+    });
+  }
+
+  @override
   void didChangeDependencies() {
     super.didChangeDependencies();
     if (_initializedArgs) return;
@@ -87,9 +100,6 @@ class _ChatRoomPageState extends State {
     }
 
     _bootstrapCustomerData();
-    _pollTimer = Timer.periodic(const Duration(milliseconds: 1500), (_) {
-      if (mounted) _fetchMessages(initialLoad: false);
-    });
   }
 
   @override
@@ -208,7 +218,8 @@ class _ChatRoomPageState extends State {
 
       final hasUnreadAdmin = filtered.any(
         (m) =>
-            (m as Map)['sender_role']?.toString() == 'admin' &&
+            (m as Map)['sender_role']?.toString().trim().toLowerCase() ==
+                'admin' &&
             m['is_read'] == false,
       );
       if (hasUnreadAdmin && !_isMarkingRead) {
@@ -559,14 +570,68 @@ class _ChatRoomPageState extends State {
     });
   }
 
+  DateTime? _parseLocalDate(dynamic rawCreatedAt) {
+    if (rawCreatedAt == null) return DateTime.now();
+    return DateTime.tryParse(rawCreatedAt.toString())?.toLocal();
+  }
+
   String _formatTime(dynamic rawCreatedAt) {
-    if (rawCreatedAt == null) {
-      final now = TimeOfDay.now();
-      return '${now.hour.toString().padLeft(2, '0')}:${now.minute.toString().padLeft(2, '0')}';
-    }
-    final dt = DateTime.tryParse(rawCreatedAt.toString())?.toLocal();
+    final dt = _parseLocalDate(rawCreatedAt);
     if (dt == null) return '';
     return '${dt.hour.toString().padLeft(2, '0')}:${dt.minute.toString().padLeft(2, '0')}';
+  }
+
+  bool _isSameDay(DateTime a, DateTime b) {
+    return a.year == b.year && a.month == b.month && a.day == b.day;
+  }
+
+  String _formatDateHeader(DateTime dt) {
+    final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
+    final yesterday = today.subtract(const Duration(days: 1));
+    final target = DateTime(dt.year, dt.month, dt.day);
+
+    if (_isSameDay(target, today)) return 'Hari ini';
+    if (_isSameDay(target, yesterday)) return 'Kemarin';
+
+    const months = [
+      'Jan',
+      'Feb',
+      'Mar',
+      'Apr',
+      'Mei',
+      'Jun',
+      'Jul',
+      'Agu',
+      'Sep',
+      'Okt',
+      'Nov',
+      'Des',
+    ];
+    return '${dt.day} ${months[dt.month - 1]} ${dt.year}';
+  }
+
+  Widget _buildDateSeparator(String label) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 12),
+      child: Center(
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 5),
+          decoration: BoxDecoration(
+            color: const Color(0xFFE2E8F0).withValues(alpha: 0.85),
+            borderRadius: BorderRadius.circular(14),
+          ),
+          child: Text(
+            label,
+            style: GoogleFonts.poppins(
+              fontSize: 10.5,
+              fontWeight: FontWeight.w600,
+              color: const Color(0xFF475569),
+            ),
+          ),
+        ),
+      ),
+    );
   }
 
   @override
@@ -743,7 +808,7 @@ class _ChatRoomPageState extends State {
             ),
           ),
 
-          // Daftar Pesan (reverse: true -> pesan terbaru selalu otomatis di paling bawah)
+          // Daftar Pesan + Pembatas Tanggal di Tengah Layar
           Expanded(
             child: _isLoadingMessages
                 ? const Center(
@@ -771,10 +836,16 @@ class _ChatRoomPageState extends State {
                         itemCount: reversedMessages.length,
                         itemBuilder: (context, index) {
                           final msg = Map.from(reversedMessages[index] as Map);
-                          final bool isUser =
-                              msg['sender_role']?.toString() == 'customer';
+                          final roleStr = (msg['sender_role'] ?? '')
+                              .toString()
+                              .trim()
+                              .toLowerCase();
+                          final bool isUser = roleStr == 'customer';
+
                           final String textContent =
                               (msg['message_text'] ?? '').toString();
+                          final DateTime? currentDt =
+                              _parseLocalDate(msg['created_at']);
                           final String timeContent =
                               _formatTime(msg['created_at']);
                           final String msgOrderCode =
@@ -785,53 +856,72 @@ class _ChatRoomPageState extends State {
                           final String msgService =
                               (meta['serviceName'] ?? '').toString();
 
-                          return Align(
+                          // Tampilkan pembatas tanggal di atas pesan pertama hari itu
+                          bool showDateHeader = false;
+                          if (currentDt != null) {
+                            if (index == reversedMessages.length - 1) {
+                              showDateHeader = true;
+                            } else {
+                              final olderMsg = Map.from(
+                                  reversedMessages[index + 1] as Map);
+                              final DateTime? olderDt =
+                                  _parseLocalDate(olderMsg['created_at']);
+                              if (olderDt == null ||
+                                  !_isSameDay(currentDt, olderDt)) {
+                                showDateHeader = true;
+                              }
+                            }
+                          }
+
+                          final bubbleWidget = Align(
                             alignment: isUser
                                 ? Alignment.centerRight
                                 : Alignment.centerLeft,
-                            child: GestureDetector(
-                              onTap: () {
-                                if (meta.isNotEmpty) _selectOrderContext(meta);
-                              },
-                              child: Container(
-                                margin: const EdgeInsets.only(bottom: 12),
-                                constraints: BoxConstraints(
-                                  maxWidth:
-                                      MediaQuery.of(context).size.width * 0.78,
+                            child: Container(
+                              margin: const EdgeInsets.only(bottom: 12),
+                              constraints: BoxConstraints(
+                                maxWidth:
+                                    MediaQuery.of(context).size.width * 0.78,
+                              ),
+                              padding: const EdgeInsets.fromLTRB(
+                                  14, 10, 10, 10),
+                              decoration: BoxDecoration(
+                                color: isUser
+                                    ? _C.bubbleUser
+                                    : _C.bubbleAdmin,
+                                borderRadius: BorderRadius.only(
+                                  topLeft: const Radius.circular(16),
+                                  topRight: const Radius.circular(16),
+                                  bottomLeft:
+                                      Radius.circular(isUser ? 16 : 4),
+                                  bottomRight:
+                                      Radius.circular(isUser ? 4 : 16),
                                 ),
-                                padding: const EdgeInsets.fromLTRB(
-                                    14, 10, 10, 10),
-                                decoration: BoxDecoration(
-                                  color: isUser
-                                      ? _C.bubbleUser
-                                      : _C.bubbleAdmin,
-                                  borderRadius: BorderRadius.only(
-                                    topLeft: const Radius.circular(16),
-                                    topRight: const Radius.circular(16),
-                                    bottomLeft:
-                                        Radius.circular(isUser ? 16 : 4),
-                                    bottomRight:
-                                        Radius.circular(isUser ? 4 : 16),
+                                boxShadow: [
+                                  BoxShadow(
+                                    color:
+                                        Colors.black.withValues(alpha: 0.03),
+                                    blurRadius: 4,
+                                    offset: const Offset(0, 2),
                                   ),
-                                  boxShadow: [
-                                    BoxShadow(
-                                      color:
-                                          Colors.black.withValues(alpha: 0.03),
-                                      blurRadius: 4,
-                                      offset: const Offset(0, 2),
-                                    ),
-                                  ],
-                                ),
-                                child: Column(
-                                  crossAxisAlignment: isUser
-                                      ? CrossAxisAlignment.end
-                                      : CrossAxisAlignment.start,
-                                  children: [
-                                    Row(
-                                      mainAxisSize: MainAxisSize.min,
-                                      children: [
-                                        if (msgOrderCode.isNotEmpty)
-                                          Flexible(
+                                ],
+                              ),
+                              child: Column(
+                                crossAxisAlignment: isUser
+                                    ? CrossAxisAlignment.end
+                                    : CrossAxisAlignment.start,
+                                children: [
+                                  Row(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      if (msgOrderCode.isNotEmpty)
+                                        Flexible(
+                                          child: InkWell(
+                                            onTap: () {
+                                              if (meta.isNotEmpty) {
+                                                _selectOrderContext(meta);
+                                              }
+                                            },
                                             child: Container(
                                               padding:
                                                   const EdgeInsets.symmetric(
@@ -862,80 +952,96 @@ class _ChatRoomPageState extends State {
                                               ),
                                             ),
                                           ),
-                                        if (isUser) ...[
-                                          const SizedBox(width: 4),
-                                          PopupMenuButton(
-                                            padding: EdgeInsets.zero,
-                                            constraints: const BoxConstraints(),
-                                            tooltip: 'Opsi pesan',
-                                            icon: const Icon(
-                                              Icons.keyboard_arrow_down_rounded,
-                                              size: 18,
-                                              color: Colors.white70,
-                                            ),
-                                            onSelected: (val) {
-                                              if (val == 'delete') {
-                                                _confirmAndDeleteMessage(msg);
-                                              }
-                                            },
-                                            itemBuilder: (ctx) => [
-                                              PopupMenuItem(
-                                                value: 'delete',
-                                                height: 36,
-                                                child: Row(
-                                                  mainAxisSize:
-                                                      MainAxisSize.min,
-                                                  children: [
-                                                    const Icon(
-                                                      Icons
-                                                          .delete_outline_rounded,
-                                                      size: 16,
+                                        ),
+                                      if (isUser) ...[
+                                        const SizedBox(width: 6),
+                                        PopupMenuButton(
+                                          padding: EdgeInsets.zero,
+                                          constraints: const BoxConstraints(),
+                                          tooltip: 'Opsi pesan',
+                                          onSelected: (val) {
+                                            if (val == 'delete') {
+                                              _confirmAndDeleteMessage(msg);
+                                            }
+                                          },
+                                          itemBuilder: (ctx) => [
+                                            PopupMenuItem(
+                                              value: 'delete',
+                                              height: 36,
+                                              child: Row(
+                                                mainAxisSize:
+                                                    MainAxisSize.min,
+                                                children: [
+                                                  const Icon(
+                                                    Icons
+                                                        .delete_outline_rounded,
+                                                    size: 16,
+                                                    color: Colors.redAccent,
+                                                  ),
+                                                  const SizedBox(width: 8),
+                                                  Text(
+                                                    'Hapus 2 Arah',
+                                                    style:
+                                                        GoogleFonts.poppins(
+                                                      fontSize: 12,
+                                                      fontWeight:
+                                                          FontWeight.w500,
                                                       color: Colors.redAccent,
                                                     ),
-                                                    const SizedBox(width: 8),
-                                                    Text(
-                                                      'Hapus 2 Arah',
-                                                      style:
-                                                          GoogleFonts.poppins(
-                                                        fontSize: 12,
-                                                        fontWeight:
-                                                            FontWeight.w500,
-                                                        color: Colors.redAccent,
-                                                      ),
-                                                    ),
-                                                  ],
-                                                ),
+                                                  ),
+                                                ],
                                               ),
-                                            ],
+                                            ),
+                                          ],
+                                          child: const Padding(
+                                            padding: EdgeInsets.all(2),
+                                            child: Icon(
+                                              Icons.keyboard_arrow_down_rounded,
+                                              size: 18,
+                                              color: Colors.white,
+                                            ),
                                           ),
-                                        ],
+                                        ),
                                       ],
+                                    ],
+                                  ),
+                                  const SizedBox(height: 6),
+                                  Text(
+                                    textContent,
+                                    style: GoogleFonts.poppins(
+                                      fontSize: 12.5,
+                                      color: isUser
+                                          ? Colors.white
+                                          : const Color(0xFF1E293B),
                                     ),
-                                    const SizedBox(height: 6),
-                                    Text(
-                                      textContent,
-                                      style: GoogleFonts.poppins(
-                                        fontSize: 12.5,
-                                        color: isUser
-                                            ? Colors.white
-                                            : const Color(0xFF1E293B),
-                                      ),
+                                  ),
+                                  const SizedBox(height: 4),
+                                  Text(
+                                    timeContent,
+                                    style: GoogleFonts.poppins(
+                                      fontSize: 9.5,
+                                      color: isUser
+                                          ? Colors.white70
+                                          : const Color(0xFF94A3B8),
                                     ),
-                                    const SizedBox(height: 4),
-                                    Text(
-                                      timeContent,
-                                      style: GoogleFonts.poppins(
-                                        fontSize: 9.5,
-                                        color: isUser
-                                            ? Colors.white70
-                                            : const Color(0xFF94A3B8),
-                                      ),
-                                    ),
-                                  ],
-                                ),
+                                  ),
+                                ],
                               ),
                             ),
                           );
+
+                          if (showDateHeader && currentDt != null) {
+                            return Column(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                _buildDateSeparator(
+                                    _formatDateHeader(currentDt)),
+                                bubbleWidget,
+                              ],
+                            );
+                          }
+
+                          return bubbleWidget;
                         },
                       ),
           ),
